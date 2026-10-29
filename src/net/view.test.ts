@@ -1,27 +1,29 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMatch } from '../score/match';
 import { createMatchStore } from '../score/store';
+import type { ClientEvent } from './client';
 import type { MatchSnapshot, RuleCall, Controls, DroneSnapshot, RosterEntry, Role, Team } from './protocol';
 
 const doubles = vi.hoisted(() => {
   class Session {
     room: string; status = 'idle'; error = ''; myId: string | null = null;
     arena = {halfLength:12,halfWidth:5.25,height:6}; maxPerTeam: 3|5 = 3;
+    calls: RuleCall[] = [];
     roster: RosterEntry[] = []; drones: DroneSnapshot[] = [];
-    callbacks = new Set<(event?: 'forcedDisarm') => void>();
+    callbacks = new Set<(event?: ClientEvent) => void>();
     sendInput = vi.fn<(controls: Controls) => void>();
     disarm = vi.fn();
     close = vi.fn(() => { this.status = 'closed'; this.emit(); });
     constructor(options: {room:string}) { this.room = options.room; }
-    onChange(fn: (event?: 'forcedDisarm') => void) { this.callbacks.add(fn); return () => this.callbacks.delete(fn); }
-    emit(event?: 'forcedDisarm') { for (const fn of this.callbacks) fn(event); }
+    onChange(fn: (event?: ClientEvent) => void) { this.callbacks.add(fn); return () => this.callbacks.delete(fn); }
+    emit(event?: ClientEvent) { for (const fn of this.callbacks) fn(event); }
     async start() { this.status = 'connected'; this.emit(); }
     sample() { return this.drones; }
     async stats() { return {linkType:'직접(같은 와이파이)',rttMs:12,statesPerSec:30,disconnects:0,peers:1}; }
   }
   class Client extends Session {
     static instances: Client[] = [];
-    match: MatchSnapshot | null = null; calls: RuleCall[] = [];
+    match: MatchSnapshot | null = null;
     remaining() { return this.match?.remaining ?? 0; }
     constructor(options: {room:string}) { super(options); Client.instances.push(this); }
     join(options: {nick:string;team:Team;role:Role}) {
@@ -175,7 +177,7 @@ describe('NET-1 actual UI event wiring (offline)',()=>{
   });
   it('forcedDisarm clears local ARM even before an armed snapshot arrives',async()=>{
     await enterFlight(); key('Space'); expect(el('arm').textContent).toBe('ARM · 모터 켜짐');
-    current().emit('forcedDisarm'); tick(16);
+    current().emit({type:'forcedDisarm',reason:'paused'}); tick(16);
     expect(el('arm').textContent).toBe('DISARM · 모터 꺼짐');
     expect(current().sendInput.mock.calls.at(-1)?.[0].armed).toBe(false);
   });
@@ -301,6 +303,8 @@ describe('RULES-1 match view wiring', () => {
     store.dispatch({type:'score',team:'blue',delta:1,auto:true,now:0});
     store.dispatch({type:'offside',team:'blue',on:true,auto:true,now:0});
     store.dispatch({type:'penalty',team:'red',reason:'own-goal-back',auto:true,now:0});
+    const host = doubles.Host.instances.at(-1)!;
+    host.calls.push({kind:'goal',team:'blue'},{kind:'offside',team:'blue'},{kind:'penalty',team:'red',reason:'own-goal-back'}); host.emit();
     expect(el('blue-score').textContent).toBe('1'); expect(el('blue-offside').hidden).toBe(false); expect(el('red-offside').hidden).toBe(true);
     expect(el('red-penalties').textContent).toBe('페널티 1'); expect(el('call').textContent).toBe('파랑 팀 골!');
     tick(2500); expect(el('call').textContent).toBe('파랑 팀 오프사이드');
@@ -309,16 +313,39 @@ describe('RULES-1 match view wiring', () => {
     el('match-clock').click(); expect(store.get().running).toBe(false); expect(el('match-clock').textContent).toBe('계속');
     el('match-undo').click(); expect(store.get().running).toBe(false);
   });
-  it('locks student ARM and Space, explains role and highlights own team calls', async () => {
-    await enterFlight(); const c=current(); c.match=createMatch(); c.match.running=true; c.emit();
-    expect(el('arm').disabled).toBe(true); expect(el('arm-reason').textContent).toBe('경기 시작 신호를 기다려요');
+  it.each([true,undefined])('allows pre-match ARM with host permission %s', async armAllowed => {
+    await enterFlight(); const c=current(); c.match={...createMatch(),armAllowed}; c.emit();
+    expect(el('arm').disabled).toBe(false); expect(el('arm-reason').textContent).toBe('');
+    if (armAllowed) expect(el('phase-hint').textContent).toContain('자유 연습 중');
+    el('arm').click(); expect(c.sendInput.mock.calls.at(-1)?.[0].armed).toBe(true);
     key('Space'); expect(c.sendInput.mock.calls.at(-1)?.[0].armed).toBe(false);
+    key('Space','keyup'); key('Space'); expect(c.sendInput.mock.calls.at(-1)?.[0].armed).toBe(true);
+    expect(el('error').hidden).toBe(true);
+  });
+  it.each([['ready','준비 시간이에요 · 출발 자리에서 기다려요'],['paused','선생님이 경기를 잠깐 멈췄어요'],['maintenance','정비 시간이에요']] as const)('explains forced DISARM: %s', async (reason,text) => {
+    await enterFlight(); const c=current(); c.match={...createMatch(),armAllowed:false};
+    c.emit({type:'forcedDisarm',reason}); expect(el('call').textContent).toBe(text); expect(el('error').hidden).toBe(true);
+  });
+  it('announces every host no-goal once despite repeated store and session updates', async () => {
+    const store=createMatchStore(createMatch()); await boot('',store); el('create').click();
+    const host=doubles.Host.instances.at(-1)!;
+    for(const reason of ['rim','not-striker','reverse'] as const) { host.calls.push({kind:'no-goal',team:'blue',reason}); host.emit(); }
+    expect(el('call').textContent).toBe('무효 · 테두리에 닿았어요');
+    host.emit(); store.dispatch({type:'tick',now:0});
+    tick(2500); expect(el('call').textContent).toBe('스트라이커만 골을 넣을 수 있어요');
+    tick(2500); expect(el('call').textContent).toBe('무효 · 역방향 통과는 점수가 없어요');
+    tick(2500); expect(el('call').hidden).toBe(true);
+  });
+  it('locks student ARM and Space, explains role and highlights own team calls', async () => {
+    await enterFlight(); const c=current(); c.match={...createMatch(),armAllowed:false}; c.match.running=true; c.emit();
+    expect(el('arm').disabled).toBe(true); expect(el('arm-reason').textContent).toBe('경기 시작 신호를 기다려요');
+    key('Space'); expect(c.sendInput.mock.calls.at(-1)?.[0].armed).toBe(false); expect(el('error').hidden).toBe(true);
     expect(el('role-help').textContent).toBe('스트라이커 = 골을 넣는 드론');
-    c.match.phase='playing'; c.emit(); expect(el('arm').disabled).toBe(false);
+    c.match.phase='playing'; c.match.armAllowed=true; c.emit(); expect(el('arm').disabled).toBe(false);
     c.match.teams.blue.offside=true; c.calls.push({kind:'no-goal',team:'blue',id:c.myId!,reason:'rim'}); c.emit();
     expect(el('my-offside').hidden).toBe(false); expect(el('call').textContent).toBe('무효 · 테두리에 닿았어요'); expect(el('call').classes.has('net-call-emphasis')).toBe(true);
     c.emit(); tick(1800); expect(el('call').hidden).toBe(true);
-    c.match.running=false; c.emit('forcedDisarm'); expect(el('arm-reason').textContent).toBe('일시정지 중이에요'); expect(el('call').textContent).toBe('선생님이 시동을 껐어요');
+    c.match.running=false; c.match.armAllowed=false; c.emit({type:'forcedDisarm',reason:'paused'}); expect(el('arm-reason').textContent).toBe('일시정지 중이에요'); expect(el('call').textContent).toBe('선생님이 경기를 잠깐 멈췄어요');
     c.match.phase='maintenance'; c.emit(); expect(el('arm-reason').textContent).toBe('정비 시간이에요');
   });
 });

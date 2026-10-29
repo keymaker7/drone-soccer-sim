@@ -11,7 +11,7 @@ export const generateRoomCode = () => Array.from(crypto.getRandomValues(new Uint
 export interface RosterEntry { id: string; nick: string; team: Team; role: Role }
 export interface DroneSnapshot { motorThrottle?: number; vy?: number; id: string; team: Team; role: Role; x: number; y: number; z: number; roll: number; pitch: number; yaw: number; armed: boolean }
 export interface Controls { throttleMode?: ThrottleMode; climb?: -1 | 0 | 1; fine?: boolean; axes: { pitch: number; roll: number; yaw: number }; throttle: number; armed: boolean }
-export interface MatchSnapshot { phase: Phase; set: number; running: boolean; remaining: number; teams: Record<Team, TeamState> }
+export interface MatchSnapshot { armAllowed?: boolean; phase: Phase; set: number; running: boolean; remaining: number; teams: Record<Team, TeamState> }
 export type CallKind = 'goal' | 'offside' | 'offside-clear' | 'penalty' | 'no-goal';
 export type CallReason = 'offside-pass' | 'own-goal-back' | 'rim' | 'not-striker' | 'reverse';
 export type DisarmReason = 'ready' | 'paused' | 'maintenance';
@@ -44,7 +44,7 @@ export function decode(raw: unknown): Message | null {
     let valid = false;
     const axes = raw.axes;
     switch (raw.type) {
-      case 'match': valid = ['ready','playing','maintenance','finished'].includes(raw.phase as string) && count(raw.set,3) && (raw.set as number) >= 1 && typeof raw.running === 'boolean' && num(raw.remaining) && raw.remaining >= 0 && raw.remaining <= 3600000 && obj(raw.teams) && teamState(raw.teams.blue) && teamState(raw.teams.red); break;
+      case 'match': valid = (raw.armAllowed === undefined || typeof raw.armAllowed === 'boolean') && ['ready','playing','maintenance','finished'].includes(raw.phase as string) && count(raw.set,3) && (raw.set as number) >= 1 && typeof raw.running === 'boolean' && num(raw.remaining) && raw.remaining >= 0 && raw.remaining <= 3600000 && obj(raw.teams) && teamState(raw.teams.blue) && teamState(raw.teams.red); break;
       case 'call': valid = ['goal','offside','offside-clear','penalty','no-goal'].includes(raw.kind as string) && team(raw.team) && (raw.id === undefined || text(raw.id)) && (raw.nick === undefined || text(raw.nick,8)) && (raw.reason === undefined || ['offside-pass','own-goal-back','rim','not-striker','reverse'].includes(raw.reason as string)); break;
       case 'disarm': valid = ['ready','paused','maintenance'].includes(raw.reason as string); break;
       case 'hello': valid = text(raw.nick, 8) && (raw.nick as string).trim().length > 0 && team(raw.team) && role(raw.role); break;

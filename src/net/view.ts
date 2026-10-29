@@ -11,7 +11,7 @@ import { guideStep } from '../sim/guide';
 import { createNetScene } from '../render/net-scene';
 import { HostSession } from './host';
 import type { MatchStore } from '../score/store';
-import { ClientSession } from './client';
+import { ClientSession, type ClientEvent } from './client';
 import { generateRoomCode, normalizeRoomCode, rolesFor, ROLE_LABELS, type Team, type Role } from './protocol';
 
 export function mountNet(root: HTMLElement, options: { match?: MatchStore; onRoomChange?: (open: boolean) => void } = {}) {
@@ -60,8 +60,8 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore; onRoo
     peerStats = {}; message = ''; nickDraft = ''; page = 'home'; render();
   }
   function watch() {
-    unsubscribe = session?.onChange((event?: 'forcedDisarm') => {
-      if (event === 'forcedDisarm') { input.armed = false; studentCalls.push('선생님이 시동을 껐어요', true); }
+    unsubscribe = session?.onChange((event?: ClientEvent) => {
+      if (event?.type === 'forcedDisarm') { input.armed = false; studentCalls.push({ready:'준비 시간이에요 · 출발 자리에서 기다려요',paused:'선생님이 경기를 잠깐 멈췄어요',maintenance:'정비 시간이에요'}[event.reason], true); }
       const c = client();
       const remote = c?.drones.find(d => d.id === c.myId);
       if (c && (c.status === 'closed' || c.status === 'error')) loseFocus(input);
@@ -145,10 +145,14 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore; onRoo
     find('match-phase').textContent = PHASE_LABELS[s.phase] + (!s.running && s.phase !== 'finished' ? ' · 멈춤' : '');
     find('match-set').textContent = `SET ${s.set}/3`;
     const hostState = isHost() ? options.match?.get() : undefined;
-    find('phase-hint').textContent = phaseHint({...s,remaining},!!hostState && !hostState.running && !hostState.records.length && !hostState.history.length);
+    find('phase-hint').textContent = phaseHint({...s,remaining},hostState ? !hostState.running && !hostState.records.length && !hostState.history.length : s.phase === 'ready' && !s.running && c?.match?.armAllowed === true);
     const me = c?.roster.find(p => p.id === c.myId);
     find('my-offside').hidden = !me || !s.teams[me.team].offside;
     for (const call of c?.calls ?? []) if (!seenCalls.has(call)) { seenCalls.add(call); studentCalls.push(callText(call,c!.roster),call.team === me?.team || call.id === c?.myId); }
+    if (session instanceof HostSession) for (const call of session.calls) if (!seenCalls.has(call)) {
+      seenCalls.add(call); hostCalls.push(callText(call,session.roster));
+      if (call.kind === 'goal' || call.kind === 'penalty') sound(call.kind === 'goal');
+    }
     const toast = (isHost() ? hostCalls : studentCalls).read(performance.now());
     find('call').textContent = toast.text; find('call').hidden = !toast.text;
     find('call').classList.toggle('net-call-emphasis',toast.emphasis);
@@ -158,20 +162,7 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore; onRoo
       find<HTMLButtonElement>('match-undo').disabled = !hostState.history.length;
     }
   }
-  options.match?.subscribe((s,previous,event) => {
-    if (!isHost()) return;
-    // Only committed automatic calls are exposed by the host store contract.
-    if (event && 'auto' in event && event.auto && 'team' in event && s.records.length > previous.records.length) {
-      const kind = event.type === 'score' ? 'goal' : event.type === 'penalty' ? 'penalty' : event.type === 'offside' ? (s.teams[event.team].offside ? 'offside' : 'offside-clear') : null;
-      if (kind) {
-        const pilot = session?.roster.find(p => `${p.nick} · ${ROLE_LABELS[p.role]}` === event.by);
-        const call: RuleCall = {kind,team:event.team,id:pilot?.id,nick:pilot?.nick,...(event.type === 'penalty' ? {reason:event.reason as RuleCall['reason']} : {})};
-        hostCalls.push(callText(call,session?.roster));
-        if (kind === 'goal' || kind === 'penalty') sound(kind === 'goal');
-      }
-    }
-    refreshMatch();
-  });
+  options.match?.subscribe(() => { if (isHost()) refreshMatch(); });
   function hostMarkup() {
     return `<section class="net-match-controls"><h2>경기 진행</h2><button id="net-match-clock" class="net-primary" type="button">경기 시작</button><button id="net-match-undo" class="net-quiet" type="button">되돌리기</button><button id="net-match-reset" class="net-quiet" type="button">경기 초기화</button><p class="net-muted">점수는 스코어판 탭과 같아요 · 자동 판정</p></section><section class="net-room-board"><p class="net-kicker">ROOM CODE / 학생에게 알려 주세요</p><strong class="net-room-code">${escape(session?.room ?? '')}</strong><button id="net-copy-url" class="net-quiet" type="button">참가 주소 복사 ↗</button><p class="net-room-url">${escape(joinUrl())}</p></section><div class="net-settings"><label>경기 인원<select id="net-size"><option value="3">3 : 3</option><option value="5">5 : 5</option></select></label><label>경기장 크기<select id="net-map">${Object.entries(ARENA_PRESETS).map(([key,preset]) => `<option value="${key}" ${key === 'practice' ? 'selected' : ''}>${preset.label}</option>`).join('')}</select></label><p class="net-muted">인원·크기는 참가자가 없을 때 바꿀 수 있어요.</p></div><section class="net-roster-section"><h2>참가자 <span id="net-count">0 / 6</span></h2><div id="net-roster" class="net-roster"></div></section><button id="net-disarm" class="net-danger" type="button">모두 시동 끄기 · DISARM</button>`;
   }
@@ -232,7 +223,7 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore; onRoo
   }
   function armToggle() {
     const reason = armLockReason(client()?.match);
-    if (!input.armed && reason) { message = reason; refresh(); return; }
+    if (!input.armed && reason) { refresh(); return; }
     if (!toggleArm(input)) message = input.throttleMode === 'easy' ? `시동이 안 걸려요 · ${input.stickMode === 2 ? 'W' : '↑'} 올림 키에서 손을 뗀 뒤 Space` : `시동이 안 걸려요 · 스로틀 ${Math.round(input.throttle*100)}% · ${input.stickMode === 2 ? 'S' : '↓'}를 꾹 눌러 0%로 내린 뒤 Space`;
     else message = '';
     sendInput(); refresh();

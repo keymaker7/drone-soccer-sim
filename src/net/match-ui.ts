@@ -6,7 +6,7 @@ export function callText(call: RuleCall, roster: RosterEntry[] = []): string {
   const team = call.team === 'blue' ? '파랑 팀' : '빨강 팀';
   const pilot = roster.find(p => p.id === call.id);
   const who = call.nick ?? pilot?.nick;
-  const reason = { 'offside-pass':'오프사이드 중 통과', 'own-goal-back':'자기 골대 뒤로 들어감', rim:'테두리에 닿았어요', 'not-striker':'스트라이커만 골을 넣을 수 있어요', reverse:'반대 방향으로 통과했어요' };
+  const reason = { 'offside-pass':'오프사이드 중 통과', 'own-goal-back':'자기 골대 뒤로 들어감', rim:'테두리에 닿았어요', 'not-striker':'스트라이커만 골을 넣을 수 있어요', reverse:'역방향 통과는 점수가 없어요' };
   if (call.kind === 'goal') return `${team} 골!${who ? ` · ${who}(${pilot ? ROLE_LABELS[pilot.role] : '스트라이커'})` : ''}`;
   if (call.kind === 'offside') return `${team} 오프사이드`;
   if (call.kind === 'offside-clear') return `${team} 오프사이드 해제`;
@@ -24,14 +24,13 @@ export function phaseHint(s: MatchSnapshot, free = false): string {
   if (s.phase === 'maintenance') return `정비 ${formatClock(s.remaining)} · 다음 세트 준비`;
   return '';
 }
-// The wire snapshot omits armAllowed and ready-state history. Keep ambiguous
-// stopped-ready snapshots locked until the host supplies an explicit contract.
+// Only the host decides whether ARM is allowed; missing fields support older hosts.
 export function armLockReason(s: MatchSnapshot | null | undefined): string {
-  if (!s) return '';
+  if (s?.armAllowed !== false) return '';
   if (s.phase === 'maintenance') return '정비 시간이에요';
   if (s.phase === 'ready') return '경기 시작 신호를 기다려요';
   if (s.phase === 'playing' && !s.running) return '일시정지 중이에요';
-  return '';
+  return '경기 시작 신호를 기다려요';
 }
 export function createCallQueue(duration: number) {
   const queue: {text:string;emphasis:boolean}[] = [];

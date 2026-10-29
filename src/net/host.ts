@@ -4,7 +4,7 @@ import { createInput, type InputState } from '../sim/input';
 import { Lobby } from './lobby';
 import { armAllowed, createReferee, refereeStep } from '../rules/referee';
 import type { MatchStore } from '../score/store';
-import { rolesFor, ROLE_LABELS, type Team, type Role, type DisarmReason, type Controls, type DroneSnapshot, type Message } from './protocol';
+import { rolesFor, ROLE_LABELS, type Team, type Role, type DisarmReason, type RuleCall, type Controls, type DroneSnapshot, type Message } from './protocol';
 import { PeerTransport, type Transport, type NetStats } from './transport';
 export type SessionStatus = 'idle' | 'connecting' | 'connected' | 'closed' | 'error';
 interface Drone { flight: FlightState; input: InputState; axes: Controls['axes']; lastInput: number; seq: number; lock: boolean }
@@ -39,6 +39,7 @@ export function formationFor(team: Team, role: Role, maxPerTeam: 3 | 5, arena: A
 export class HostSession {
   readonly room: string; arena: Arena; maxPerTeam: 3 | 5; status: SessionStatus = 'idle'; error = ''; readonly myId = null;
   readonly lobby: Lobby;
+  calls: (RuleCall & {receivedAt: number})[] = [];
   readonly simulation = new Map<string, Drone>();
   private transport: Transport; private peers = new Set<string>(); private listeners = new Set<() => void>();
   private timer?: ReturnType<typeof setInterval>; private tick = 0; private lastTime = 0; private accumulator = 0;
@@ -64,7 +65,7 @@ export class HostSession {
   configure(config: {arena: Arena; maxPerTeam: 3 | 5}) { return this.setConfig(config); }
   async start() { this.status = 'connecting'; this.changed(); try { await this.transport.open({role:'host',room:this.room}); if ((this.status as SessionStatus) === 'closed') return; this.status = 'connected'; this.lastTime = performance.now(); this.timer = setInterval(() => { const now = performance.now(); this.advance(now - this.lastTime, now); this.lastTime = now; }, 1000/120); this.changed(); } catch (e) { this.error = e instanceof Error ? e.message : String(e); this.status = 'error'; this.changed(); throw e; } }
   private broadcast(message: Message) { for (const id of this.peers) this.transport.send(id,message); }
-  private sendMatch() { if (!this.match) return; const {phase,set,running,remaining,teams} = this.match.get(); this.broadcast({v:1,type:'match',phase,set,running,remaining,teams}); }
+  private sendMatch() { if (!this.match) return; const state = this.match.get(), {phase,set,running,remaining,teams} = state; this.broadcast({v:1,type:'match',phase,set,running,remaining,teams,armAllowed:armAllowed(state)}); }
   private resetFormation() { for (const p of this.roster) { const d = this.simulation.get(p.id); if (d) { d.flight = formationFor(p.team,p.role,this.maxPerTeam,this.arena); d.axes = {pitch:0,roll:0,yaw:0}; d.input.climbIntegral = 0; } } this.referee = createReferee(this.arena); }
   private judge(prev: Map<string, FlightState['pos']>) {
     if (!this.match) return;
@@ -77,7 +78,10 @@ export class HostSession {
       if (call.kind === 'goal') this.match.dispatch({type:'score',delta:1,...meta});
       else if (call.kind === 'penalty') this.match.dispatch({type:'penalty',reason:call.reason,...meta});
       else if (call.kind === 'offside' || call.kind === 'offside-clear') this.match.dispatch({type:'offside',on:call.kind === 'offside',...meta});
-      this.broadcast({v:1,type:'call',...call,...(pilot ? {nick:pilot.nick} : {})});
+      const announced = {...call,...(pilot ? {nick:pilot.nick} : {})};
+      this.calls = [...this.calls,{...announced,receivedAt:performance.now()}].slice(-5);
+      this.broadcast({v:1,type:'call',...announced});
+      this.changed();
     }
   }
   private sendRoster() { for (const id of this.peers) this.transport.send(id, {v:1,type:'roster',roster:this.roster,arena:this.arena,maxPerTeam:this.maxPerTeam}); }

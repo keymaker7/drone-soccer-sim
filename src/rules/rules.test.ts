@@ -113,5 +113,5 @@ it('practice counts clean passes and rising rim contacts only', () => {
   for (const u of [-0.2, 0.05, 0.3]) { const pos = point(u); practiceStep(s, prev, pos); prev = pos; }
   expect(s.passes).toBe(1);
   const touch = point(0, 0.1); practiceStep(s, prev, touch); practiceStep(s, touch, touch); expect(s.rimTouches).toBe(1);
-  practiceStep(s, touch, point(-0.6)); practiceStep(s, point(-0.6), touch); expect(s.rimTouches).toBe(2);
+  practiceStep(s, touch, point(-0.6)); for(let i=1;i<60;i++) practiceStep(s, point(-0.6), point(-0.6)); practiceStep(s, point(-0.6), touch); expect(s.rimTouches).toBe(2);
 });
