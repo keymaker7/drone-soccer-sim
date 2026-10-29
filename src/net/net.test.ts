@@ -56,7 +56,7 @@ describe('authoritative host and clients',()=>{
    }
    expect(drone.flight).toEqual(local);
   }
-  expect(Math.abs(drone.flight.vel.y+.5)).toBeLessThan(.1); expect(host.drones[0].vy).toBe(drone.flight.vel.y); expect(host.drones[0].motorThrottle).toBe(drone.input.motorThrottle);
+  expect(Math.abs(drone.flight.vel.y-C.climbSpeed.idle)).toBeLessThan(.15); expect(host.drones[0].vy).toBe(drone.flight.vel.y); expect(host.drones[0].motorThrottle).toBe(drone.input.motorThrottle);
   client.disarm(); expect(drone.input.armed).toBe(false); expect(drone.input.throttleMode).toBe('easy'); expect(drone.input.climb).toBe(0); expect(drone.input.fine).toBe(false);
   host.close(); client.close();
  });

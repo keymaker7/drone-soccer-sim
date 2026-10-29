@@ -322,8 +322,8 @@ describe('FIX-6 쉬운 스로틀 UI', () => {
     expect(el('vertical-speed').textContent).toContain('상승 +');
     key('KeyW', 'keyup'); tick(2000);
     expect(el('left-stick').style.transform).toBe('translate(0px, 0px)');
-    expect(win.__DRONE_QA!.state().vy).toBeCloseTo(-.5, 1);
-    expect(el('vertical-speed').textContent).toContain('하강 −0.5');
+    expect(win.__DRONE_QA!.state().vy).toBeCloseTo(C.climbSpeed.idle, 1);
+    expect(el('vertical-speed').textContent).toContain('하강 −1.0');
     tick(10000);
     expect(win.__DRONE_QA!.state()).toMatchObject({armed:true, throttle:0, vy:0, pos:{y:C.radius}});
   });

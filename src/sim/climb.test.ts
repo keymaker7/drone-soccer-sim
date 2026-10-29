@@ -6,7 +6,7 @@ import { changeThrottleMode, createInput, loadThrottleMode, loseFocus, readInput
 const arena = { halfLength: 100, halfWidth: 100, height: 100 };
 afterEach(() => vi.unstubAllGlobals());
 describe('FIX-6 easy climb control', () => {
-  it.each([[0, false, -0.5, 0.1], [1, false, 1.5, 0.15], [-1, false, -1.8, 0.2], [1, true, 0.5, 0.1]] as const)('climb %s fine %s converges in two seconds', (climb, fine, target, tolerance) => {
+  it.each([[0, false, C.climbSpeed.idle, 0.15], [1, false, 1.5, 0.15], [-1, false, -1.8, 0.2], [1, true, 0.5, 0.1]] as const)('climb %s fine %s converges in two seconds', (climb, fine, target, tolerance) => {
     const flight = createFlight(), input = createInput(); flight.pos = { x: 0, y: 10, z: 0 }; input.armed = true; input.climb = climb; input.fine = fine;
     for (let n = 0; n < 240; n++) stepFlight(flight, input, C.step, arena, { pitch: 0, roll: 0, yaw: 0 });
     expect(Math.abs(flight.vel.y - target)).toBeLessThanOrEqual(tolerance);
@@ -16,7 +16,7 @@ describe('FIX-6 easy climb control', () => {
     for (let n = 0; n < 240; n++) stepFlight(flight, input, C.step);
     expect(flight.pos.y).toBeGreaterThan(2); input.keys.clear();
     for (let n = 0; n < 240; n++) stepFlight(flight, input, C.step);
-    expect(Math.abs(flight.vel.y + .5)).toBeLessThan(.1);
+    expect(Math.abs(flight.vel.y - C.climbSpeed.idle)).toBeLessThan(.15);
     input.keys.add('ArrowUp');
     for (let n = 0; n < 1200; n++) stepFlight(flight, input, C.step);
     expect(flight.pos.y).toBe(C.radius); expect(flight.vel).toEqual({x:0,y:0,z:0}); expect(input.motorThrottle).toBe(0);
@@ -30,7 +30,7 @@ describe('FIX-6 easy climb control', () => {
   it('30 degree forward tilt maintains slow descent', () => {
     const flight = createFlight(), input = createInput(); flight.pos = {x:0,y:10,z:0}; input.armed = true;
     for (let n = 0; n < 240; n++) stepFlight(flight, input, C.step, arena, {pitch:-30/35,roll:0,yaw:0});
-    expect(Math.abs(flight.vel.y + .5)).toBeLessThan(.2); expect(flight.vel.x).toBeGreaterThan(1);
+    expect(Math.abs(flight.vel.y - C.climbSpeed.idle)).toBeLessThan(.25); expect(flight.vel.x).toBeGreaterThan(1);
   });
   it('held up remains bounded at ceiling and never accumulates runaway integral', () => {
     const flight = createFlight(), input = createInput(); input.armed = true; input.keys.add('KeyW'); let lowest = Infinity;

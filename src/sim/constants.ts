@@ -34,6 +34,8 @@ export const C = {
     { min: 0.7, max: 1, rate: 0.35 },
   ],
   fineThrottleRate: 0.08, throttleTapSeconds: 0.12, throttleTapScale: 0.5,
+  // Easy throttle target vertical speeds (m/s): hold up / Shift+up / no key / hold down.
+  climbSpeed: { up: 1.5, fineUp: 0.5, idle: -1.0, down: -1.8 },
   motorTimeConstant: 0.08, armThreshold: 0.05,
   camera: {
     ...defaultLayout.camera,

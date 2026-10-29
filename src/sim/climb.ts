@@ -1,7 +1,7 @@
 import { C, MAX_THRUST } from './constants';
 export type ThrottleMode = 'easy' | 'manual';
 export type ClimbDirection = -1 | 0 | 1;
-export const targetClimbSpeed = (climb: ClimbDirection, fine: boolean): number => climb > 0 ? (fine ? 0.5 : 1.5) : climb < 0 ? -1.8 : -0.5;
+export const targetClimbSpeed = (climb: ClimbDirection, fine: boolean): number => climb > 0 ? (fine ? C.climbSpeed.fineUp : C.climbSpeed.up) : climb < 0 ? C.climbSpeed.down : C.climbSpeed.idle;
 
 // Pure PI controller. The integral is explicit so local and authoritative host
 // simulations run precisely the same controller, independent of rendering.
