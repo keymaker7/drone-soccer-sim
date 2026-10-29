@@ -115,3 +115,13 @@ kbd { font: inherit; font-weight: 750; color: inherit; }
 .net-throttle-mode button[aria-pressed='true'] { border-color: #8ddfff; background: #21425a; color: #e8faff; }
 .net-throttle-mode button:focus-visible { outline: 2px solid white; outline-offset: 2px; }
 #net-vertical-speed { color: #a8e8ff; font-weight: 700; font-variant-numeric: tabular-nums; }
+
+.practice-chip { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 0 0 12px; padding: 5px 8px; background: #153044; border: 1px solid #3c617b; border-radius: 7px; color: #c8f3ff; white-space: nowrap; font-size: 12px; }
+.practice-chip button { padding: 5px 7px; font: inherit; color: #dff6ff; background: #21425a; border: 1px solid #56829b; border-radius: 5px; cursor: pointer; }
+.practice-chip button:focus-visible { outline: 2px solid #b5edff; outline-offset: 2px; }
+@media (max-height: 700px) {
+  #telemetry .controller { padding-bottom: 7px; margin-bottom: 7px; }
+  #telemetry .stick-well { width: 60px; height: 60px; }
+  #telemetry .readings { gap: 6px; }
+  #telemetry .practice-chip { margin-bottom: 8px; }
+}

@@ -1,6 +1,6 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>드론축구 · 비행과 경기 운영</title></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%23091323'/%3E%3Ccircle cx='32' cy='32' r='21' fill='none' stroke='%238ddfff' stroke-width='5'/%3E%3Cpath d='M18 18L46 46M46 18L18 46' stroke='%238ddfff' stroke-width='4'/%3E%3C/svg%3E"><title>드론축구 · 비행과 경기 운영</title></head>
 <body>
   <nav class="workspace-tabs" aria-label="드론축구 작업 공간">
     <a id="tab-fly" href="#fly" aria-current="page">비행 연습</a>
@@ -41,6 +41,7 @@
       <p id="notice" role="status">올림 키에서 손을 떼고 Space로 시동</p>
       <div class="throttle-label"><span id="throttle-label">쉬운 스로틀</span><b id="throttle">추력 0%</b></div><meter id="throttle-meter" min="0" max="100" value="0" aria-label="스로틀"></meter>
       <p id="vertical-speed" class="vertical-speed">수직 속도 0.0 m/s</p>
+      <div class="practice-chip"><output id="practice-count" aria-label="연습 기록">골대 통과 0 · 테두리 0</output><button id="practice-reset" type="button" aria-label="연습 기록 지우기">지우기</button></div>
       <dl class="readings"><div><dt>롤 / 피치</dt><dd id="tilt">0° / 0°</dd></div><div><dt>속도</dt><dd id="speed">0.00 m/s</dd></div><div><dt>고도 · 중심</dt><dd id="altitude">0.20 m</dd></div><div><dt>카메라</dt><dd id="camera">1 · LOS 조종자</dd></div></dl>
     </section>
     <section id="startup-guide" aria-labelledby="guide-title">

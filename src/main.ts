@@ -41,7 +41,12 @@ const throttleDown = () => input.stickMode === 2 ? 'S' : '↓';
 const tiltKeys = () => input.stickMode === 2 ? '방향키' : 'W/S · ←/→';
 let flight = createFlight(arena);
 let practice = createPractice(arena);
-const clock = createFixedClock(dt => { const prev = { ...flight.pos }; stepFlight(flight, input, dt, arena); practiceStep(practice, prev, flight.pos); });
+const clock = createFixedClock(dt => {
+  const prev = { ...flight.pos }, passes = practice.passes, rimTouches = practice.rimTouches;
+  stepFlight(flight, input, dt, arena); practiceStep(practice, prev, flight.pos);
+  if (practice.rimTouches > rimTouches) showToast('테두리에 닿았어요', false, 1200);
+  else if (practice.passes > passes) showToast('통과!', false, 1200);
+});
 const notice = element('notice');
 const arm = element('arm');
 const throttle = element('throttle');
@@ -61,11 +66,11 @@ let successAt: number | undefined;
 let toastUntil = 0;
 let refusalUntil = 0;
 let lastGroundHint = -Infinity;
-function showToast(message: string, refusal = false) {
+function showToast(message: string, refusal = false, duration = 2500) {
   toast.textContent = message;
   toast.hidden = false;
   toast.classList.toggle('refusal', refusal);
-  toastUntil = performance.now() + 2500;
+  toastUntil = performance.now() + duration;
   if (refusal) {
     refusalUntil = toastUntil;
     meter.classList.remove('shake');
@@ -111,9 +116,16 @@ function ensureScene() {
     alert.textContent = '3D 화면을 시작할 수 없습니다. WebGL을 지원하는 브라우저에서 다시 열어 주세요. 스코어판·전술판은 사용할 수 있어요.';
   }
 }
+element('practice-reset').addEventListener('click', () => {
+  practice = createPractice(arena);
+  toastUntil = 0;
+  renderHud();
+  element('practice-reset').blur();
+});
 const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyM', 'KeyN', 'KeyT', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
 function renderHud() {
   renderGuide();
+  element('practice-count').textContent = `골대 통과 ${practice.passes} · 테두리 ${practice.rimTouches}`;
   const axes = { ...axesFromKeys(input.keys, input.stickMode), ...input.stick };
   const throttleY = isEasy() ? -axes.throttle : 1 - input.throttle * 2;
   const leftY = input.stickMode === 2 ? throttleY : axes.pitch;
@@ -218,13 +230,13 @@ window.addEventListener('blur', safetyStop);
 document.addEventListener('visibilitychange', () => { if (document.hidden) safetyStop(); });
 const qa = Object.freeze({ state: () => ({
   throttleMode: input.throttleMode, vy: flight.vel.y, stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
-  stick: { ...input.stick }, net: netView.state(), practice: { passes: practice.passes, rimTouches: practice.rimTouches },
+  toast: toast.hidden ? '' : toast.textContent, stick: { ...input.stick }, net: netView.state(), practice: { passes: practice.passes, rimTouches: practice.rimTouches },
   rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view?.mode ?? 1, arena: arenaSize(), tab,
 }) });
 Object.defineProperty(window, '__DRONE_QA', { value: qa, writable: false, configurable: false });
 const match = createMatchStore(createMatch(), true);
-const netView = mountNet(element('net-root'), { match });
 const scoreView = mountScore(element('score-root'), match);
+const netView = mountNet(element('net-root'), { match, onRoomChange: connected => scoreView.setConnected(connected) });
 const tacticsView = mountTactics(element('tactics-root'), arenaSize);
 function renderMap() {
   for (const id of mapIds) element(`map-${id}`).setAttribute('aria-pressed', String(mapId === id));

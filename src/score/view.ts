@@ -4,17 +4,17 @@ import type { MatchEvent, Settings, Team } from './match';
 import './style.css';
 
 const PHASES = { ready: '준비', playing: '경기', maintenance: '정비', finished: '종료' };
-export function mountScore(container: HTMLElement, store: MatchStore): { setActive(active: boolean): void; dispatch(event: MatchEvent): void } {
+export function mountScore(container: HTMLElement, store: MatchStore): { setActive(active: boolean): void; setConnected(connected: boolean): void; dispatch(event: MatchEvent): void } {
   let active = false;
   let state = store.get();
   let audio: AudioContext | undefined;
   container.classList.add('score-view');
-  container.innerHTML = `<header class="score-heading"><div><span class="score-eyebrow">DRONE SOCCER · MATCH CONTROL</span><h1>우리들의 경기, 지금 시작.</h1></div></header>
+  container.innerHTML = `<div class="score-connected" role="status" hidden>함께 경기와 연결됨 · 자동 판정 켜짐</div><header class="score-heading"><div><h1>우리들의 경기, 지금 시작.</h1></div></header>
   <div class="score-arena"><section class="score-team score-blue" data-team="blue"></section><section class="score-clock-panel"><span class="score-set"></span><strong class="score-phase"></strong><output class="score-clock" aria-label="남은 시간"></output><span class="score-running"></span><div class="score-main-controls"><button data-action="clock" class="score-primary"></button><button data-action="undo">↶ 되돌리기</button></div></section><section class="score-team score-red" data-team="red"></section></div>
   <div class="score-result" role="status"></div><div class="score-set-results"></div>
   <div class="score-toolbar"><button data-action="mute"></button><button data-action="reset">경기 초기화</button><span class="score-save-status"></span></div>
   <details class="score-settings"><summary>경기 시간 설정</summary><form><label>준비 <input name="ready" type="number" min="1" max="3600" required> 초</label><label>세트 <input name="playing" type="number" min="1" max="3600" required> 초</label><label>정비 <input name="maintenance" type="number" min="1" max="3600" required> 초</label><button type="submit">적용</button></form><p>경기 시작 전 설정 · 최대 3세트 / 2세트 선승 · 무승부 세트는 승수 없음</p></details>
-  <section class="score-log"><header><h2>경기 기록 <span class="score-record-count"></span></h2><div><button data-action="json">JSON 내려받기</button><button data-action="csv">CSV 내려받기</button></div></header><div class="score-table-scroll"><table><thead><tr><th>세트</th><th>남은 시간</th><th>시각</th><th>팀</th><th>사건</th><th>점수</th></tr></thead><tbody></tbody></table></div></section>
+  <section class="score-log"><header><h2>경기 기록 <span class="score-record-count"></span></h2><div><button data-action="json">JSON 내려받기</button><button data-action="csv">CSV 내려받기</button></div></header><div class="score-table-scroll"><table><thead><tr><th>세트</th><th>남은 시간</th><th>시각</th><th>팀</th><th>사건</th><th>기체</th><th>판정</th><th>점수</th></tr></thead><tbody></tbody></table></div></section>
   <p class="score-shortcuts">심판 단축키 · 1 / 2 득점 · Shift + 1 / 2 감점 · O / P 오프사이드 · Z 되돌리기 · Space 시작 / 일시정지 / 계속</p>`;
   const find = <T extends HTMLElement = HTMLElement>(selector: string) => container.querySelector<T>(selector)!;
   for (const team of ['blue', 'red'] as const) {
@@ -57,7 +57,7 @@ export function mountScore(container: HTMLElement, store: MatchStore): { setActi
       panel.querySelectorAll<HTMLButtonElement>('button').forEach(button => { button.disabled = state.phase === 'finished' || (button.dataset.delta === '-1' && t.score === 0); });
     }
     const winner = state.teams.blue.wins === state.teams.red.wins ? null : state.teams.blue.wins > state.teams.red.wins ? 'blue' : 'red';
-    find('.score-result').textContent = state.phase === 'finished' ? winner ? `🏆 ${state.teams[winner].name} 승리!` : '경기 종료 · 무승부' : '';
+    find('.score-result').textContent = state.phase === 'finished' ? winner ? `${state.teams[winner].name} 승리!` : '경기 종료 · 무승부' : '';
     find('.score-result').hidden = state.phase !== 'finished';
     find('.score-set-results').textContent = state.results.map(r => `${r.set}세트 ${r.blue} : ${r.red} · ${r.winner ? `${state.teams[r.winner].name} 승` : '무승부 세트'}`).join('   /   ');
     const form = find<HTMLFormElement>('form');
@@ -66,10 +66,10 @@ export function mountScore(container: HTMLElement, store: MatchStore): { setActi
     const body = find<HTMLTableSectionElement>('tbody'); body.replaceChildren();
     for (const r of [...state.records].reverse()) {
       const row = document.createElement('tr');
-      for (const value of [r.set, formatClock(r.remaining), new Date(r.at).toLocaleTimeString('ko-KR'), r.team ? state.teams[r.team].name : '전체', r.kind, r.score]) { const cell = document.createElement('td'); cell.textContent = String(value); row.append(cell); }
+      for (const value of [r.set, formatClock(r.remaining), new Date(r.at).toLocaleTimeString('ko-KR'), r.team ? state.teams[r.team].name : '전체', r.kind, r.drone ?? '—', r.auto ? '자동' : '수동', r.score]) { const cell = document.createElement('td'); cell.textContent = String(value); row.append(cell); }
       body.append(row);
     }
-    if (!state.records.length) { const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 6; cell.textContent = '첫 휘슬을 기다리고 있어요. 경기 사건이 여기에 기록됩니다.'; }
+    if (!state.records.length) { const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 8; cell.textContent = '첫 휘슬을 기다리고 있어요. 경기 사건이 여기에 기록됩니다.'; }
     find('.score-record-count').textContent = String(state.records.length);
   }
   const dispatch = (event: MatchEvent) => store.dispatch(event);
@@ -111,5 +111,5 @@ export function mountScore(container: HTMLElement, store: MatchStore): { setActi
   });
   setInterval(() => { if (state.running) dispatch({ type: 'tick', now: Date.now() }); }, 200);
   render();
-  return { setActive(value) { active = value; if (value) dispatch({ type: 'tick', now: Date.now() }); }, dispatch };
+  return { setConnected(connected) { find('.score-connected').hidden = !connected; }, setActive(value) { active = value; if (value) dispatch({ type: 'tick', now: Date.now() }); }, dispatch };
 }

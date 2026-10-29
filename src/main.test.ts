@@ -2,9 +2,9 @@ import { C } from './sim/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const netSpies = vi.hoisted(() => ({ setActive: vi.fn(), state: vi.fn(() => ({ role: null, room: '', peers: 0, drones: [], myId: null })) }));
-const mounts = vi.hoisted(() => ({ net: vi.fn(), score: vi.fn() }));
+const mounts = vi.hoisted(() => ({ net: vi.fn(), score: vi.fn(), setConnected: vi.fn() }));
 vi.mock('./net/view', () => ({ mountNet: (...args: unknown[]) => { mounts.net(...args); return netSpies; } }));
-vi.mock('./score/view', () => ({ mountScore: (...args: unknown[]) => { mounts.score(...args); return { setActive: vi.fn() }; } }));
+vi.mock('./score/view', () => ({ mountScore: (...args: unknown[]) => { mounts.score(...args); return { setActive: vi.fn(), setConnected: mounts.setConnected }; } }));
 vi.mock('./tactics/view', () => ({ mountTactics: () => ({ setActive: vi.fn(), refresh: vi.fn() }) }));
 const sceneSpies = vi.hoisted(() => ({ draw: vi.fn(), setArena: vi.fn(), resize: vi.fn() }));
 vi.mock('./render/scene', () => ({
@@ -71,10 +71,35 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
   it('하나의 경기 store를 두 탭에 연결하고 연습 통계는 복사본으로 공개한다', () => {
     const store = mounts.score.mock.calls.at(-1)![1];
-    expect(mounts.net.mock.calls.at(-1)![1]).toEqual({ match: store });
+    expect(mounts.net.mock.calls.at(-1)![1]).toEqual({ match: store, onRoomChange: expect.any(Function) });
     const snapshot = win.__DRONE_QA!.state() as ReturnType<NonNullable<typeof win.__DRONE_QA>['state']> & {practice:{passes:number;rimTouches:number}};
     expect(snapshot.practice).toEqual({passes:0,rimTouches:0}); snapshot.practice.passes=999;
     expect(win.__DRONE_QA!.state()).toMatchObject({practice:{passes:0,rimTouches:0}});
+  });
+  it('방 연결 변화가 스코어판 연결 띠에 전달된다', () => {
+    const options = mounts.net.mock.calls.at(-1)![1];
+    options.onRoomChange(true); expect(mounts.setConnected).toHaveBeenLastCalledWith(true);
+    options.onRoomChange(false); expect(mounts.setConnected).toHaveBeenLastCalledWith(false);
+  });
+  it('연습 통과와 테두리 횟수 표시, 1.2초 알림, 지우기는 비행 상태 유지', async () => {
+    const practice = await import('./rules/practice');
+    const step = vi.spyOn(practice, 'practiceStep');
+    expect(el('practice-count').textContent).toBe('골대 통과 0 · 테두리 0');
+    step.mockImplementationOnce(state => { state.passes = 3; state.rimTouches = 1; });
+    tick(16);
+    expect(el('practice-count').textContent).toBe('골대 통과 3 · 테두리 1');
+    expect(el('flight-toast').textContent).toBe('테두리에 닿았어요');
+    tick(1200); expect(el('flight-toast').hidden).toBe(true);
+    step.mockImplementationOnce(state => { state.passes++; }); tick(16);
+    expect(el('flight-toast').textContent).toBe('통과!');
+    tick(1199); expect(el('flight-toast').hidden).toBe(false);
+    tick(1); expect(el('flight-toast').hidden).toBe(true);
+    key('Space'); key('KeyW'); tick(1000); key('KeyW', 'keyup');
+    const before = win.__DRONE_QA!.state();
+    el('practice-reset').dispatchEvent(new Event('click'));
+    expect(el('practice-count').textContent).toBe('골대 통과 0 · 테두리 0');
+    expect(win.__DRONE_QA!.state()).toMatchObject({ armed: before.armed, throttle: before.throttle, pos: before.pos });
+    step.mockRestore();
   });
   it('로드만으로 이륙하지 않고 단계 2, 넓은 화면 도움말 열림, QA 읽기 전용', () => {
     tick(2000);

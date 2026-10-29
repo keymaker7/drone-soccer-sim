@@ -149,3 +149,42 @@
 .net-workspace:is(.net-flight,.net-host) > .net-copy-fallback { position:absolute; z-index:3; right:12px; bottom:36px; width:min(500px,60%); }
 @media(max-width:1100px) { .net-live-layout { grid-template-columns:260px minmax(0,1fr); } .net-workspace:is(.net-flight,.net-host) > .net-error:not([hidden]) { left:280px; } .net-arena-caption { flex-direction:column; align-items:flex-start; gap:4px; } }
 @media(max-width:620px) { .net-live-layout { display:grid; grid-template-columns:minmax(170px,40%) minmax(0,1fr); } .net-live-layout > .net-side { padding:6px; } .net-flight-status { flex-wrap:wrap; } .net-workspace:is(.net-flight,.net-host) > .net-error:not([hidden]) { left:8px; } .net-network #net-stats { display:none; } .net-stick-well { width:58px; height:58px; } }
+
+/* Match overlays occupy the canvas, never an extra workspace grid row. */
+.net-match-strip { position:absolute; z-index:1; top:10px; left:10px; right:10px; display:grid; grid-template-columns:minmax(0,1fr) minmax(140px,.7fr) minmax(0,1fr); gap:8px; padding:10px; border:1px solid #426079; border-radius:6px; background:#091522ed; font-variant-numeric:tabular-nums; pointer-events:none; }
+.net-match-strip[hidden],.net-offside[hidden],.net-call[hidden] { display:none; }
+.net-match-team { min-width:0; text-align:center; display:flex; flex-direction:column; align-items:center; gap:3px; color:#a6d8ff; }
+.net-match-red { color:#ffb4b1; }
+.net-match-team > span:first-child { max-width:100%; font-size:18px; font-weight:750; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
+.net-match-team > strong { font-size:64px; line-height:1; color:#f1f8ff; }
+.net-match-team small { font-size:11px; color:#bacad7; }
+.net-match-center { display:flex; flex-direction:column; align-items:center; justify-content:center; gap:5px; color:#eaf5ff; }
+.net-match-center > strong { font-size:48px; line-height:1.1; }
+.net-match-center > span { font-size:17px; }
+.net-match-center small { color:#b6cad8; }
+.net-offside { color:#ffdfb3; background:#633710; border:1px solid #e6a45f; border-radius:3px; padding:5px 6px; font-size:13px; font-weight:750; animation:net-offside-pulse 3s ease-in-out infinite; }
+.net-match-messages { position:absolute; z-index:1; top:48%; left:5%; right:5%; display:flex; flex-direction:column; align-items:center; pointer-events:none; text-align:center; }
+.net-call { margin:0 0 10px; padding:16px 22px; background:#102333f5; border:2px solid #d5f59a; border-radius:7px; font-size:clamp(26px,2.5vw,38px); font-weight:800; color:#f4ffe8; overflow-wrap:anywhere; }
+.net-phase-hint { margin:0; padding:7px 10px; background:#091522da; border-radius:4px; font-size:18px; color:#dcebf4; }
+.net-phase-hint:empty { display:none; }
+.net-match-controls { border-bottom:1px solid var(--net-line); margin-bottom:12px; padding-bottom:6px; display:flex; flex-wrap:wrap; gap:6px; }
+.net-match-controls h2 { width:100%; font-size:16px; margin:0 0 5px; }
+.net-match-controls button { padding:8px 9px; font-size:12px; }
+.net-match-controls p { margin:3px 0; }
+.net-arm-reason { color:#ffcf94; font-size:12px; margin:5px 0 0; }
+.net-arm-reason:empty { display:none; }
+.net-arena-caption { top:auto; bottom:12px; }
+.net-flight .net-match-strip { grid-template-columns:1fr 110px 1fr; padding:7px; gap:5px; }
+.net-flight .net-match-team > strong { font-size:30px; }
+.net-flight .net-match-team > span:first-child { font-size:12px; }
+.net-flight .net-match-center > strong { font-size:26px; }
+.net-flight .net-match-center > span { font-size:12px; }
+.net-flight .net-match-team > small,.net-flight .net-match-team > span:not(:first-child),.net-flight #net-match-set { display:none; }
+#net-my-offside { grid-column:1 / -1; margin:0; text-align:center; }
+.net-flight .net-call { font-size:19px; padding:10px 14px; border-color:#7693a7; }
+.net-flight .net-call-emphasis { border-color:#d5f59a; background:#24372c; }
+.net-flight .net-phase-hint { font-size:14px; }
+.net-workspace:is(.net-flight,.net-host) .net-heading .net-kicker { display:block; font-size:8px; margin:0; line-height:1.1; }
+@keyframes net-offside-pulse { 50% { border-color:#fff0ce; background:#79471c; } }
+@media(prefers-reduced-motion:reduce) { .net-offside { animation:none; } }
+@media(max-width:1100px) { .net-match-strip { grid-template-columns:minmax(0,1fr) 140px minmax(0,1fr); gap:4px; padding:8px; } .net-match-team > span:first-child { font-size:15px; } .net-offside { font-size:11px; } }

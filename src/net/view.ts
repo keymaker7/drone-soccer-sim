@@ -1,3 +1,6 @@
+import { formatClock } from '../score/match';
+import { armLockReason, callText, createCallQueue, PHASE_LABELS, phaseHint } from './match-ui';
+import type { RuleCall } from './protocol';
 import { createStick } from '../sim/stick';
 import './style.css';
 import { ARENA_PRESETS, DEFAULT_ARENA } from '../sim/constants';
@@ -11,8 +14,16 @@ import type { MatchStore } from '../score/store';
 import { ClientSession } from './client';
 import { generateRoomCode, normalizeRoomCode, rolesFor, ROLE_LABELS, type Team, type Role } from './protocol';
 
-export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}) {
+export function mountNet(root: HTMLElement, options: { match?: MatchStore; onRoomChange?: (open: boolean) => void } = {}) {
   let active = false;
+  const hostCalls = createCallQueue(2500), studentCalls = createCallQueue(1800);
+  let seenCalls = new WeakSet<RuleCall>();
+  let audio: AudioContext | undefined;
+  let roomOpen = false;
+  function sound(goal: boolean) {
+    if (!active || options.match?.get().muted) return;
+    try { audio ??= new AudioContext(); void audio.resume().catch(() => {}); const osc = audio.createOscillator(), gain = audio.createGain(); osc.frequency.value = goal ? 880 : 220; gain.gain.setValueAtTime(.07,audio.currentTime); gain.gain.exponentialRampToValueAtTime(.001,audio.currentTime+.16); osc.connect(gain); gain.connect(audio.destination); osc.start(); osc.stop(audio.currentTime+.17); osc.onended=()=>{osc.disconnect();gain.disconnect();}; } catch { /* Optional sound. */ }
+  }
   let page: 'home' | 'join' | 'host' | 'flight' = 'home';
   let session: HostSession | ClientSession | undefined;
   let scene: ReturnType<typeof createNetScene> | undefined;
@@ -43,13 +54,14 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
     remoteArmed = false;
   }
   function leave() {
+    hostCalls.clear(); studentCalls.clear(); seenCalls = new WeakSet();
     safeStop(); unsubscribe?.(); unsubscribe = undefined; session?.close(); session = undefined;
     stats = { linkType: '연결 안 됨', rttMs: 0, statesPerSec: 0, disconnects: 0, peers: 0 };
     peerStats = {}; message = ''; nickDraft = ''; page = 'home'; render();
   }
   function watch() {
     unsubscribe = session?.onChange((event?: 'forcedDisarm') => {
-      if (event === 'forcedDisarm') input.armed = false;
+      if (event === 'forcedDisarm') { input.armed = false; studentCalls.push('선생님이 시동을 껐어요', true); }
       const c = client();
       const remote = c?.drones.find(d => d.id === c.myId);
       if (c && (c.status === 'closed' || c.status === 'error')) loseFocus(input);
@@ -79,14 +91,14 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
   function render() {
     scene?.dispose(); scene = undefined; rolesSignature = '';
     root.className = `net-workspace net-${page}`;
-    const top = `<header class="net-heading"><div><p class="net-kicker">DRONE SOCCER / CONNECTION TEST</p><h1>함께 경기<span>접속 시험판</span></h1></div>${page !== 'home' ? '<button id="net-leave" class="net-quiet" type="button">'+(page === 'host' ? '방 닫기' : page === 'flight' ? '방 나가기' : '처음으로')+'</button>' : '<span class="net-tag">학교 와이파이 · 3:3 / 5:5</span>'}</header>`;
+    const top = `<header class="net-heading"><div><p class="net-kicker">DRONE SOCCER / MATCH</p><h1>함께 경기</h1></div>${page !== 'home' ? '<button id="net-leave" class="net-quiet" type="button">'+(page === 'host' ? '방 닫기' : page === 'flight' ? '방 나가기' : '처음으로')+'</button>' : '<span class="net-tag">학교 와이파이 · 3:3 / 5:5</span>'}</header>`;
     let body = '';
     if (page === 'home') {
-      body = `<section class="net-welcome"><p class="net-kicker">같은 경기장, 각자의 조종석</p><h2>친구의 드론이<br>움직이는 순간.</h2><p>교사 PC가 경기장을 열고, 학생은 방 코드로 들어와요.<br>먼저 연결을 확인하고 함께 날아 보세요.</p><div class="net-entry-grid"><button id="net-create" class="net-entry" type="button"><span class="net-entry-number">01 / TEACHER</span><strong>방 만들기 <small>(교사 PC)</small></strong><span>큰 화면에 경기장을 열어요 <b>↗</b></span></button><button id="net-join-screen" class="net-entry" type="button"><span class="net-entry-number">02 / PILOT</span><strong>방 참가 <small>(학생)</small></strong><span>4자리 코드로 조종석에 앉아요 <b>↗</b></span></button></div><p class="net-footnote">연결 시험용 · 자동 득점 판정은 아직 없어요 · 키보드가 필요해요</p></section>`;
+      body = `<section class="net-welcome"><p class="net-kicker">같은 경기장, 각자의 조종석</p><h2>친구의 드론이<br>움직이는 순간.</h2><p>교사 PC가 경기장을 열고, 학생은 방 코드로 들어와요.<br>먼저 연결을 확인하고 함께 날아 보세요.</p><div class="net-entry-grid"><button id="net-create" class="net-entry" type="button"><span class="net-entry-number">01 / TEACHER</span><strong>방 만들기 <small>(교사 PC)</small></strong><span>큰 화면에 경기장을 열어요 <b>↗</b></span></button><button id="net-join-screen" class="net-entry" type="button"><span class="net-entry-number">02 / PILOT</span><strong>방 참가 <small>(학생)</small></strong><span>4자리 코드로 조종석에 앉아요 <b>↗</b></span></button></div><p class="net-footnote">자동 득점 판정 · 키보드가 필요해요</p></section>`;
     } else if (page === 'join') {
       body = `<section class="net-join-card"><div class="net-join-title"><span class="net-entry-number">PILOT CHECK-IN</span><h2>내 조종석 고르기</h2></div><form id="net-form"><fieldset><legend>1. 선생님의 방 코드</legend><div class="net-code-inputs">${[0,1,2,3].map(i => `<input id="net-code-${i}" aria-label="방 코드 ${i+1}번째 문자" maxlength="1" autocapitalize="characters" autocomplete="off" spellcheck="false" value="${escape(roomDraft[i] ?? '')}">`).join('')}</div><button id="net-connect" class="net-primary" type="button">방 연결 · 빈자리 확인</button><p id="net-connect-state" class="net-muted">코드를 입력하고 빈자리를 확인하세요.</p></fieldset><fieldset><legend>2. 별명과 팀</legend><label class="net-nick-label">별명 <input id="net-nick" maxlength="8" autocomplete="off" placeholder="예: 날쌘감자" value="${escape(nickDraft)}" required></label><p class="net-muted">실명은 쓰지 마세요. 별명은 저장하지 않아요. (최대 8자)</p><div class="net-team-picks"><button id="net-blue" type="button" data-team="blue" aria-pressed="${team === 'blue'}">파랑 팀</button><button id="net-red" type="button" data-team="red" aria-pressed="${team === 'red'}">빨강 팀</button></div></fieldset><fieldset><legend>3. 내 역할 <small>회색 자리는 다른 친구가 조종 중</small></legend><div id="net-roles" class="net-role-picks"></div></fieldset><button id="net-enter" class="net-primary net-wide" type="submit" disabled>이 자리로 참가하기</button></form></section>`;
     } else {
-      body = `<div class="net-live-layout"><aside class="net-side">${page === 'host' ? hostMarkup() : flightMarkup()}</aside><section class="net-arena-wrap" aria-label="함께 비행 경기장"><div id="net-scene" class="net-scene"></div><div class="net-arena-caption"><span>${page === 'host' ? '전체 경기장' : '우리 팀 조종석 · LOS'}</span><span>${page === 'host' ? '3 전체 보기 / 5 심판 시점' : '내 드론도 선생님 PC에서 받은 위치로 보여요'}</span></div></section></div>`;
+      body = `<div class="net-live-layout"><aside class="net-side">${page === 'host' ? hostMarkup() : flightMarkup()}</aside><section class="net-arena-wrap" aria-label="함께 비행 경기장"><div id="net-scene" class="net-scene"></div>${matchMarkup()}<div class="net-arena-caption"><span>${page === 'host' ? '전체 경기장' : '우리 팀 조종석 · LOS'}</span><span>${page === 'host' ? '3 전체 보기 / 5 심판 시점' : '내 드론도 선생님 PC에서 받은 위치로 보여요'}</span></div></section></div>`;
     }
     root.innerHTML = top + `<div id="net-error" class="net-error" role="alert" hidden></div>` + body + statusMarkup();
     button('create', () => { page = 'host'; session = new HostSession({match:options.match, room: generateRoomCode(), arena: DEFAULT_ARENA, maxPerTeam: 3 }); watch(); render(); void session.start().catch(handleError); });
@@ -94,6 +106,9 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
     button('leave', leave); button('copy', () => { void copyResults(); });
     if (page === 'join') bindJoin();
     if (page === 'host') {
+      button('match-clock', () => { const s = options.match?.get(); if (s) options.match!.dispatch({type:s.running ? 'pause' : s.history.length || s.records.length ? 'resume' : 'start',now:Date.now()}); });
+      button('match-undo', () => options.match?.dispatch({type:'undo',now:Date.now()}));
+      button('match-reset', () => { if (window.confirm('점수와 모든 경기 기록을 지우고 새 경기를 준비할까요?')) { hostCalls.clear(); options.match?.dispatch({type:'reset',now:Date.now()}); } });
       button('disarm', () => session instanceof HostSession && session.disarmAll());
       button('copy-url', () => { void copyText(joinUrl(), '참가 주소를 복사했어요.'); });
       find<HTMLSelectElement>('size').addEventListener('change', configure);
@@ -108,11 +123,60 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
     resetLiveScroll();
     renderRoles(); sceneStart(); refresh();
   }
+  function matchMarkup() {
+    return `<div id="net-match-strip" class="net-match-strip" aria-label="경기 점수"><div class="net-match-team net-match-blue"><span id="net-blue-name"></span><strong id="net-blue-score"></strong><span id="net-blue-wins"></span><small id="net-blue-penalties"></small><span id="net-blue-offside" class="net-offside" hidden>오프사이드 · 자기 진영으로!</span></div><div class="net-match-center"><strong id="net-match-time"></strong><span id="net-match-phase"></span><small id="net-match-set"></small></div><div class="net-match-team net-match-red"><span id="net-red-name"></span><strong id="net-red-score"></strong><span id="net-red-wins"></span><small id="net-red-penalties"></small><span id="net-red-offside" class="net-offside" hidden>오프사이드 · 자기 진영으로!</span></div><p id="net-my-offside" class="net-offside" hidden>우리 팀 오프사이드! 모두 우리 진영으로 돌아가요</p></div><div class="net-match-messages"><p id="net-call" class="net-call" role="status" aria-live="polite" hidden></p><p id="net-phase-hint" class="net-phase-hint"></p></div>`;
+  }
+  function refreshMatch() {
+    if (!find('match-strip')) return;
+    const c = client(), s = isHost() ? options.match?.get() : c?.match;
+    find('match-strip').hidden = !s;
+    if (!s) return;
+    const remaining = isHost() ? s.remaining : c!.remaining();
+    for (const team of ['blue','red'] as const) {
+      const t = s.teams[team];
+      find(`${team}-name`).textContent = t.name;
+      find(`${team}-score`).textContent = String(t.score);
+      find(`${team}-wins`).textContent = '●'.repeat(t.wins)+'○'.repeat(3-t.wins);
+      find(`${team}-wins`).setAttribute('aria-label',`세트 ${t.wins}승`);
+      find(`${team}-penalties`).textContent = `페널티 ${t.penalties}`;
+      find(`${team}-offside`).hidden = !t.offside;
+    }
+    find('match-time').textContent = formatClock(remaining);
+    find('match-phase').textContent = PHASE_LABELS[s.phase] + (!s.running && s.phase !== 'finished' ? ' · 멈춤' : '');
+    find('match-set').textContent = `SET ${s.set}/3`;
+    const hostState = isHost() ? options.match?.get() : undefined;
+    find('phase-hint').textContent = phaseHint({...s,remaining},!!hostState && !hostState.running && !hostState.records.length && !hostState.history.length);
+    const me = c?.roster.find(p => p.id === c.myId);
+    find('my-offside').hidden = !me || !s.teams[me.team].offside;
+    for (const call of c?.calls ?? []) if (!seenCalls.has(call)) { seenCalls.add(call); studentCalls.push(callText(call,c!.roster),call.team === me?.team || call.id === c?.myId); }
+    const toast = (isHost() ? hostCalls : studentCalls).read(performance.now());
+    find('call').textContent = toast.text; find('call').hidden = !toast.text;
+    find('call').classList.toggle('net-call-emphasis',toast.emphasis);
+    if (hostState) {
+      find<HTMLButtonElement>('match-clock').disabled = s.phase === 'finished';
+      find('match-clock').textContent = s.running ? '일시정지' : hostState.history.length || hostState.records.length ? '계속' : '경기 시작';
+      find<HTMLButtonElement>('match-undo').disabled = !hostState.history.length;
+    }
+  }
+  options.match?.subscribe((s,previous,event) => {
+    if (!isHost()) return;
+    // Only committed automatic calls are exposed by the host store contract.
+    if (event && 'auto' in event && event.auto && 'team' in event && s.records.length > previous.records.length) {
+      const kind = event.type === 'score' ? 'goal' : event.type === 'penalty' ? 'penalty' : event.type === 'offside' ? (s.teams[event.team].offside ? 'offside' : 'offside-clear') : null;
+      if (kind) {
+        const pilot = session?.roster.find(p => `${p.nick} · ${ROLE_LABELS[p.role]}` === event.by);
+        const call: RuleCall = {kind,team:event.team,id:pilot?.id,nick:pilot?.nick,...(event.type === 'penalty' ? {reason:event.reason as RuleCall['reason']} : {})};
+        hostCalls.push(callText(call,session?.roster));
+        if (kind === 'goal' || kind === 'penalty') sound(kind === 'goal');
+      }
+    }
+    refreshMatch();
+  });
   function hostMarkup() {
-    return `<section class="net-room-board"><p class="net-kicker">ROOM CODE / 학생에게 알려 주세요</p><strong class="net-room-code">${escape(session?.room ?? '')}</strong><button id="net-copy-url" class="net-quiet" type="button">참가 주소 복사 ↗</button><p class="net-room-url">${escape(joinUrl())}</p></section><div class="net-settings"><label>경기 인원<select id="net-size"><option value="3">3 : 3</option><option value="5">5 : 5</option></select></label><label>경기장 크기<select id="net-map">${Object.entries(ARENA_PRESETS).map(([key,preset]) => `<option value="${key}" ${key === 'practice' ? 'selected' : ''}>${preset.label}</option>`).join('')}</select></label><p class="net-muted">인원·크기는 참가자가 없을 때 바꿀 수 있어요.</p></div><section class="net-roster-section"><h2>참가자 <span id="net-count">0 / 6</span></h2><div id="net-roster" class="net-roster"></div></section><button id="net-disarm" class="net-danger" type="button">모두 시동 끄기 · DISARM</button>`;
+    return `<section class="net-match-controls"><h2>경기 진행</h2><button id="net-match-clock" class="net-primary" type="button">경기 시작</button><button id="net-match-undo" class="net-quiet" type="button">되돌리기</button><button id="net-match-reset" class="net-quiet" type="button">경기 초기화</button><p class="net-muted">점수는 스코어판 탭과 같아요 · 자동 판정</p></section><section class="net-room-board"><p class="net-kicker">ROOM CODE / 학생에게 알려 주세요</p><strong class="net-room-code">${escape(session?.room ?? '')}</strong><button id="net-copy-url" class="net-quiet" type="button">참가 주소 복사 ↗</button><p class="net-room-url">${escape(joinUrl())}</p></section><div class="net-settings"><label>경기 인원<select id="net-size"><option value="3">3 : 3</option><option value="5">5 : 5</option></select></label><label>경기장 크기<select id="net-map">${Object.entries(ARENA_PRESETS).map(([key,preset]) => `<option value="${key}" ${key === 'practice' ? 'selected' : ''}>${preset.label}</option>`).join('')}</select></label><p class="net-muted">인원·크기는 참가자가 없을 때 바꿀 수 있어요.</p></div><section class="net-roster-section"><h2>참가자 <span id="net-count">0 / 6</span></h2><div id="net-roster" class="net-roster"></div></section><button id="net-disarm" class="net-danger" type="button">모두 시동 끄기 · DISARM</button>`;
   }
   function flightMarkup() {
-    return `<div class="net-flight-hud"><div class="net-pilot-label" id="net-pilot-label"></div><div class="net-flight-status"><button id="net-arm" class="net-quiet" type="button">DISARM · 시동 꺼짐</button><button id="net-stop" class="net-danger" type="button">안전 정지</button></div><div class="net-throttle"><label for="net-meter"><span id="net-throttle-label">추력</span> <strong id="net-throttle">0%</strong></label><meter id="net-meter" min="0" max="100" value="0"></meter><span id="net-altitude">높이 0.20 m</span><span id="net-vertical-speed">수직 속도 0.0 m/s</span></div></div><div class="net-flight-scroll" tabindex="0" aria-label="비행 조작 안내"><div class="net-mode"><button id="net-mode-2" type="button" aria-pressed="true">모드 2 · 기본</button><button id="net-mode-1" type="button" aria-pressed="false">모드 1</button></div><div class="net-sticks">${['left','right'].map(side => `<div><span id="net-${side}-label"></span><div class="net-stick-well"><i id="net-${side}-dot"></i></div><span id="net-${side}-keys"></span></div>`).join('')}</div><section class="net-guide" id="net-guide"><p class="net-kicker">FIRST FLIGHT / <span id="net-guide-progress">01 / 04</span></p><h2>처음이면 이렇게 해요</h2><ol><li id="net-step-1"></li><li id="net-step-2">Space · 시동 걸기</li><li id="net-step-3"></li><li id="net-step-4">방향 조종 · 기울여 보기</li></ol><strong id="net-guide-hint"></strong></section><details class="net-safety"><summary>조작과 안전 규칙</summary><div class="net-throttle-mode" role="group" aria-label="스로틀 방식"><span>스로틀</span><button id="net-throttle-easy" type="button">쉬움</button><button id="net-throttle-manual" type="button">실제</button></div><p id="net-throttle-help"></p><p>Space 시동 켜기·끄기 · M 조작 모드 · T 스로틀 방식<br>A / D 방향 돌리기 · ← / → 좌우 기울이기</p><p>짧게 톡 = 살짝, 꾹 = 끝까지 · Shift = 절반만</p><p id="net-arm-help"></p><p>창·탭을 떠나면 즉시 시동이 꺼져요.<br>입력이 1초 끊기면 선생님 PC도 시동을 꺼요.</p></details></div>`;
+    return `<div class="net-flight-hud"><div class="net-pilot-label" id="net-pilot-label"></div><p id="net-role-help" class="net-muted"></p><div class="net-flight-status"><button id="net-arm" class="net-quiet" type="button">DISARM · 시동 꺼짐</button><button id="net-stop" class="net-danger" type="button">안전 정지</button></div><p id="net-arm-reason" class="net-arm-reason" role="status"></p><div class="net-throttle"><label for="net-meter"><span id="net-throttle-label">추력</span> <strong id="net-throttle">0%</strong></label><meter id="net-meter" min="0" max="100" value="0"></meter><span id="net-altitude">높이 0.20 m</span><span id="net-vertical-speed">수직 속도 0.0 m/s</span></div></div><div class="net-flight-scroll" tabindex="0" aria-label="비행 조작 안내"><div class="net-mode"><button id="net-mode-2" type="button" aria-pressed="true">모드 2 · 기본</button><button id="net-mode-1" type="button" aria-pressed="false">모드 1</button></div><div class="net-sticks">${['left','right'].map(side => `<div><span id="net-${side}-label"></span><div class="net-stick-well"><i id="net-${side}-dot"></i></div><span id="net-${side}-keys"></span></div>`).join('')}</div><section class="net-guide" id="net-guide"><p class="net-kicker">FIRST FLIGHT / <span id="net-guide-progress">01 / 04</span></p><h2>처음이면 이렇게 해요</h2><ol><li id="net-step-1"></li><li id="net-step-2">Space · 시동 걸기</li><li id="net-step-3"></li><li id="net-step-4">방향 조종 · 기울여 보기</li></ol><strong id="net-guide-hint"></strong></section><details class="net-safety"><summary>조작과 안전 규칙</summary><div class="net-throttle-mode" role="group" aria-label="스로틀 방식"><span>스로틀</span><button id="net-throttle-easy" type="button">쉬움</button><button id="net-throttle-manual" type="button">실제</button></div><p id="net-throttle-help"></p><p>Space 시동 켜기·끄기 · M 조작 모드 · T 스로틀 방식<br>A / D 방향 돌리기 · ← / → 좌우 기울이기</p><p>짧게 톡 = 살짝, 꾹 = 끝까지 · Shift = 절반만</p><p id="net-arm-help"></p><p>창·탭을 떠나면 즉시 시동이 꺼져요.<br>입력이 1초 끊기면 선생님 PC도 시동을 꺼요.</p></details></div>`;
   }
   function joinUrl() { return `${location.origin}${location.pathname}#join=${session?.room ?? roomDraft}`; }
   function handleError(error: unknown) { message = session?.error || (error instanceof Error ? error.message : '연결을 시작하지 못했어요.'); refresh(); }
@@ -167,12 +231,17 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
     refresh();
   }
   function armToggle() {
+    const reason = armLockReason(client()?.match);
+    if (!input.armed && reason) { message = reason; refresh(); return; }
     if (!toggleArm(input)) message = input.throttleMode === 'easy' ? `시동이 안 걸려요 · ${input.stickMode === 2 ? 'W' : '↑'} 올림 키에서 손을 뗀 뒤 Space` : `시동이 안 걸려요 · 스로틀 ${Math.round(input.throttle*100)}% · ${input.stickMode === 2 ? 'S' : '↓'}를 꾹 눌러 0%로 내린 뒤 Space`;
     else message = '';
     sendInput(); refresh();
   }
   function sendInput() { const { pitch, roll, yaw } = input.stick; const { throttle } = axesFromKeys(input.keys,input.stickMode); if (page === 'flight') client()?.sendInput({ axes: {pitch, roll, yaw}, throttle: input.throttle, armed: input.armed, throttleMode: input.throttleMode, climb: throttle as -1|0|1, fine: input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') }); }
   function refresh() {
+    const open = session instanceof HostSession && session.status === 'connected';
+    if (open !== roomOpen) { roomOpen = open; options.onRoomChange?.(open); }
+    refreshMatch();
     const error = session?.error || message || (client()?.status === 'closed' ? '방이 닫혔어요' : '');
     if (find('error')) { find('error').hidden = !error; find('error').textContent = error; }
     find('link').textContent = stats.linkType;
@@ -196,6 +265,10 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
     find('pilot-label').textContent = me ? `${me.team === 'blue' ? '파랑' : '빨강'} 팀 / ${ROLE_LABELS[me.role]} / ${me.nick}` : '내 조종석';
     find('arm').textContent = input.armed ? 'ARM · 모터 켜짐' : 'DISARM · 모터 꺼짐';
     find('arm').classList.toggle('net-armed', input.armed);
+    const reason = armLockReason(c?.match);
+    find<HTMLButtonElement>('arm').disabled = !!reason && !input.armed;
+    find('arm-reason').textContent = reason;
+    find('role-help').textContent = me ? `${ROLE_LABELS[me.role]} = ${me.role === 'striker' ? '골을 넣는 드론' : me.role === 'keeper' ? '우리 골대 지키기' : '길 열기·막기'}` : '';
     const easy = input.throttleMode === 'easy';
     const thrust = drone?.motorThrottle ?? 0;
     find('throttle-label').textContent = easy ? '추력' : '스로틀';
@@ -256,6 +329,7 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
     frameId = 0; if (!active) return;
     const elapsed = previous ? Math.min(.05,(time-previous)/1000) : 0; previous = time;
     if (page === 'flight' && client()?.status === 'connected' && !document.hidden) { readInput(input,elapsed); sendInput(); refreshFlight(); }
+    refreshMatch();
     const arena = session?.arena ?? DEFAULT_ARENA;
     if (scene && sceneArena !== JSON.stringify(arena)) { scene.setArena(arena); sceneArena = JSON.stringify(arena); }
     if (session) scene?.draw(client()?.sample(time) ?? session.drones,session.roster,client()?.myId ?? null,elapsed);
@@ -269,6 +343,6 @@ export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}
   render(); applyHash();
   return {
     setActive(value: boolean) { active = value; if (!value) { safeStop(); cancelAnimationFrame(frameId); frameId=0; previous=0; } else { const preferred = loadThrottleMode(); if (!input.armed && preferred !== input.throttleMode) changeThrottleMode(input, preferred); applyHash(); if (page === 'flight') refreshFlight(); resetLiveScroll(); scene?.resize(); if (!frameId) frameId = requestAnimationFrame(frame); } },
-    state: () => ({ stick: { ...input.stick }, throttleMode: input.throttleMode, vy: client()?.drones.find(d => d.id === client()?.myId)?.vy ?? 0, role: session ? isHost() ? 'host' : 'client' : null, room: session?.room ?? '', peers: stats.peers, rttMs: stats.rttMs, linkType: stats.linkType, statesPerSec: stats.statesPerSec, disconnects: stats.disconnects, drones: session?.drones.map(d => ({...d})) ?? [], myId: client()?.myId ?? null }),
+    state: () => ({ matchStrip: {visible:!!find('match-strip') && !find('match-strip').hidden,text:find('match-strip')?.textContent ?? ''}, toast:find('call')?.textContent ?? '', stick: { ...input.stick }, throttleMode: input.throttleMode, vy: client()?.drones.find(d => d.id === client()?.myId)?.vy ?? 0, role: session ? isHost() ? 'host' : 'client' : null, room: session?.room ?? '', peers: stats.peers, rttMs: stats.rttMs, linkType: stats.linkType, statesPerSec: stats.statesPerSec, disconnects: stats.disconnects, drones: session?.drones.map(d => ({...d})) ?? [], myId: client()?.myId ?? null }),
   };
 }

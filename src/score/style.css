@@ -63,3 +63,5 @@
   .score-number { font-size: 88px; } .score-team-tools { flex-direction: column; } .score-points { gap: 5px; }
   .score-view .score-add { font-size: 15px; padding-inline: 7px; } .score-points button { padding-inline: 8px; }
 }
+
+.score-connected { margin-bottom: 16px; padding: 12px 16px; border: 1px solid #54899c; border-radius: 9px; background: #153446; color: #c8f3ff; font-size: 14px; font-weight: 700; }

@@ -1,5 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
-import type { Controls, DroneSnapshot, RosterEntry, Role, Team } from './protocol';
+import { createMatch } from '../score/match';
+import { createMatchStore } from '../score/store';
+import type { MatchSnapshot, RuleCall, Controls, DroneSnapshot, RosterEntry, Role, Team } from './protocol';
 
 const doubles = vi.hoisted(() => {
   class Session {
@@ -19,6 +21,8 @@ const doubles = vi.hoisted(() => {
   }
   class Client extends Session {
     static instances: Client[] = [];
+    match: MatchSnapshot | null = null; calls: RuleCall[] = [];
+    remaining() { return this.match?.remaining ?? 0; }
     constructor(options: {room:string}) { super(options); Client.instances.push(this); }
     join(options: {nick:string;team:Team;role:Role}) {
       this.myId = 'pilot-1'; this.roster = [{id:this.myId,...options}];
@@ -85,7 +89,7 @@ const el = (id:string) => elements.get(`net-${id}`)!;
 const current = () => doubles.Client.instances.at(-1)!;
 function key(code:string,type='keydown') { const event = new Event(type,{cancelable:true}); Object.assign(event,{code,repeat:false}); win.dispatchEvent(event); }
 function tick(ms:number) { for (let end=now+ms;now<end;) { now=Math.min(end,now+16); frame(now); } }
-async function boot(hash='') {
+async function boot(hash='', store?: ReturnType<typeof createMatchStore>) {
   vi.resetModules(); elements = new Map(); now=0; frame=()=>{};
   doubles.Client.instances=[]; doubles.Host.instances=[];
   root = new Element(true); win = new EventTarget(); doc = Object.assign(new EventTarget(),{hidden:false,createElement:()=>new Element()});
@@ -97,7 +101,7 @@ async function boot(hash='') {
   vi.stubGlobal('setInterval',vi.fn());
   vi.stubGlobal('localStorage',{getItem:vi.fn(),setItem:vi.fn()});
   vi.stubGlobal('navigator',{userAgent:'Offline test',clipboard:{writeText:vi.fn(async()=>{})}});
-  const {mountNet} = await import('./view'); view=mountNet(root as unknown as HTMLElement); view.setActive(true);
+  const {mountNet} = await import('./view'); view=mountNet(root as unknown as HTMLElement, {match:store}); view.setActive(true);
 }
 async function enterFlight() {
   await boot('#join=ABCD'); el('connect').click(); await Promise.resolve();
@@ -286,5 +290,35 @@ describe('FIX-7 학생 아날로그 스틱 전송', () => {
     key(pitchKey); tick(100); win.dispatchEvent(new Event('blur'));
     expect(view.state().stick).toEqual({pitch:0,roll:0,yaw:0});
     expect(el('step-4').textContent).toContain('짧게 톡 = 살짝, 꾹 = 끝까지 · Shift = 절반만');
+  });
+});
+
+
+describe('RULES-1 match view wiring', () => {
+  it('renders host store scores, stages, penalties and offside, with shared controls', async () => {
+    const store = createMatchStore(createMatch()); await boot('',store); el('create').click();
+    expect(el('blue-score').textContent).toBe('0'); expect(el('phase-hint').textContent).toContain('자유 연습 중');
+    store.dispatch({type:'score',team:'blue',delta:1,auto:true,now:0});
+    store.dispatch({type:'offside',team:'blue',on:true,auto:true,now:0});
+    store.dispatch({type:'penalty',team:'red',reason:'own-goal-back',auto:true,now:0});
+    expect(el('blue-score').textContent).toBe('1'); expect(el('blue-offside').hidden).toBe(false); expect(el('red-offside').hidden).toBe(true);
+    expect(el('red-penalties').textContent).toBe('페널티 1'); expect(el('call').textContent).toBe('파랑 팀 골!');
+    tick(2500); expect(el('call').textContent).toBe('파랑 팀 오프사이드');
+    tick(2500); expect(el('call').textContent).toContain('자기 골대 뒤로 들어감');
+    el('match-clock').click(); expect(store.get().running).toBe(true); expect(el('match-clock').textContent).toBe('일시정지');
+    el('match-clock').click(); expect(store.get().running).toBe(false); expect(el('match-clock').textContent).toBe('계속');
+    el('match-undo').click(); expect(store.get().running).toBe(false);
+  });
+  it('locks student ARM and Space, explains role and highlights own team calls', async () => {
+    await enterFlight(); const c=current(); c.match=createMatch(); c.match.running=true; c.emit();
+    expect(el('arm').disabled).toBe(true); expect(el('arm-reason').textContent).toBe('경기 시작 신호를 기다려요');
+    key('Space'); expect(c.sendInput.mock.calls.at(-1)?.[0].armed).toBe(false);
+    expect(el('role-help').textContent).toBe('스트라이커 = 골을 넣는 드론');
+    c.match.phase='playing'; c.emit(); expect(el('arm').disabled).toBe(false);
+    c.match.teams.blue.offside=true; c.calls.push({kind:'no-goal',team:'blue',id:c.myId!,reason:'rim'}); c.emit();
+    expect(el('my-offside').hidden).toBe(false); expect(el('call').textContent).toBe('무효 · 테두리에 닿았어요'); expect(el('call').classes.has('net-call-emphasis')).toBe(true);
+    c.emit(); tick(1800); expect(el('call').hidden).toBe(true);
+    c.match.running=false; c.emit('forcedDisarm'); expect(el('arm-reason').textContent).toBe('일시정지 중이에요'); expect(el('call').textContent).toBe('선생님이 시동을 껐어요');
+    c.match.phase='maintenance'; c.emit(); expect(el('arm-reason').textContent).toBe('정비 시간이에요');
   });
 });

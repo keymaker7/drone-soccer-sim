@@ -60,7 +60,20 @@ describe('score view real event wiring', () => {
     store.dispatch({ type: 'score', team: 'blue', delta: 1, by: '하늘 · 스트라이커', auto: true, now: Date.now() });
     expect(root.querySelector('[data-team="blue"]').querySelector('.score-number').textContent).toBe('1');
     expect(root.querySelector('tbody').children).toHaveLength(1);
+    expect(root.innerHTML).toContain('<th>기체</th><th>판정</th>');
+    const cells = root.querySelector('tbody').children[0].children;
+    expect(cells[5].textContent).toBe('하늘 · 스트라이커');
+    expect(cells[6].textContent).toBe('자동');
     click('score', 'red', '1'); expect(store.get().teams.red.score).toBe(1);
+    const manualCells = root.querySelector('tbody').children[0].children;
+    expect(manualCells[5].textContent).toBe('—');
+    expect(manualCells[6].textContent).toBe('수동');
+  });
+  it('shows the connected banner only while a shared match room is open', () => {
+    score.setConnected(true); expect(root.querySelector('.score-connected').hidden).toBe(false);
+    score.setConnected(false); expect(root.querySelector('.score-connected').hidden).toBe(true);
+    expect(root.innerHTML).toContain('함께 경기와 연결됨 · 자동 판정 켜짐');
+    expect(root.innerHTML).not.toContain('MATCH CONTROL');
   });
   it('scopes shortcuts to active tab and excludes edited names', () => {
     key('Digit1', '1'); expect(persisted().teams.blue.score).toBe(0);
