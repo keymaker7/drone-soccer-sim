@@ -16,6 +16,26 @@
       <p id="notice" role="status">스로틀 5% 이하에서 Space로 ARM</p>
       <div class="throttle-label"><span>스로틀</span><b id="throttle">0%</b></div><meter id="throttle-meter" min="0" max="100" value="0" aria-label="스로틀"></meter>
       <dl class="readings"><div><dt>롤 / 피치</dt><dd id="tilt">0° / 0°</dd></div><div><dt>속도</dt><dd id="speed">0.00 m/s</dd></div><div><dt>고도 · 중심</dt><dd id="altitude">0.20 m</dd></div><div><dt>카메라</dt><dd id="camera">1 · LOS 조종자</dd></div></dl>
-    </section><div id="scene-error" role="alert" hidden></div>
+    </section>
+    <section id="startup-guide" aria-labelledby="guide-title">
+      <div class="guide-heading"><span class="eyebrow">FIRST FLIGHT</span><span id="guide-progress">02 / 04</span></div>
+      <h2 id="guide-title">차근차근, 첫 비행</h2>
+      <ol class="guide-steps">
+        <li data-step="1"><span class="step-number">①</span><span><kbd>↓</kbd> 스로틀 0%</span></li>
+        <li data-step="2"><span class="step-number">②</span><span><kbd>Space</kbd> 시동</span></li>
+        <li data-step="3"><span class="step-number">③</span><span><kbd>↑</kbd> 꾹 <small>55% 넘으면 떠요</small></span></li>
+        <li data-step="4"><span class="step-number">④</span><span><kbd>W/A/S/D</kbd>로 기울이기</span></li>
+      </ol>
+      <p id="guide-status" role="status">Space를 눌러 시동을 걸어요</p>
+    </section>
+    <div id="flight-toast" role="alert" aria-atomic="true" hidden></div>
+    <dialog id="keyboard-overlay" aria-labelledby="keyboard-title" aria-describedby="keyboard-description">
+      <span class="eyebrow">비행을 시작하기 전에</span>
+      <div class="keyboard-symbol" aria-hidden="true">⌨</div>
+      <h2 id="keyboard-title">이 연습은 키보드가 있는<br>컴퓨터에서 해요</h2>
+      <p id="keyboard-description">USB 조종기는 다음 단계</p>
+      <button id="close-keyboard" type="button">닫기</button>
+    </dialog>
+    <div id="scene-error" role="alert" hidden></div>
   </main><script type="module" src="/src/main.ts"></script>
 </body></html>

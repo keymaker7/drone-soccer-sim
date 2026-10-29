@@ -7,7 +7,7 @@ export const C = {
   step: 1 / 120, maxFrameTime: 0.25, clockEpsilon: 1e-10,
   maxTilt: 35 * Math.PI / 180, attitudeKp: 32, attitudeKd: 11,
   yawRate: 100 * Math.PI / 180, linearDrag: 0.22, restitution: 0.35,
-  throttleRate: 0.30, armThreshold: 0.05,
+  throttleRate: 0.45, armThreshold: 0.05,
   camera: {
     los: { x: -9.5, y: 1.7, z: 0 },
     overview: { x: -13, y: 11, z: 13 }, referee: { x: 0, y: 3, z: 10 },

@@ -3,3 +3,4 @@ dist/
 ._*
 .DS_Store
 shots/
+.omx/
