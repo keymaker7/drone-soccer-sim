@@ -1,22 +1,37 @@
 import './style.css';
 import { axesFromKeys, type StickMode } from './sim/keymap';
-import { C, DEG } from './sim/constants';
+import { DEG, ARENA_PRESETS, type Arena } from './sim/constants';
 import { createFlight, stepFlight } from './sim/flight';
 import { createInput, loseFocus, releaseKey, toggleArm } from './sim/input';
 import { guideStep, needsTakeoff } from './sim/guide';
 import { createFixedClock } from './sim/clock';
 import { CAMERA_NAMES, createScene, type CameraMode } from './render/scene';
 
+import { mountScore } from './score/view';
+import { mountTactics } from './tactics/view';
+
+type Tab = 'fly' | 'score' | 'tactics';
+const tabFromHash = (): Tab => window.location.hash === '#score' ? 'score' : window.location.hash === '#tactics' ? 'tactics' : 'fly';
+let tab: Tab = tabFromHash();
+type MapId = keyof typeof ARENA_PRESETS;
+const mapIds: MapId[] = ['official', 'practice', 'large'];
+let mapId: MapId = 'practice';
+try {
+  const stored = localStorage.getItem('drone-soccer-arena');
+  if (mapIds.includes(stored as MapId)) mapId = stored as MapId;
+} catch { /* Default practice arena remains available. */ }
+let arena: Arena = ARENA_PRESETS[mapId].arena;
+const arenaSize = () => ({ length: arena.halfLength * 2, width: arena.halfWidth * 2, height: arena.height });
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
-element('arena-subtitle').textContent = `연습 경기장 ${C.arena.halfLength * 2} × ${C.arena.halfWidth * 2} m`;
+
 const input = createInput();
 const modeStorageKey = 'drone-soccer-stick-mode';
 try { if (localStorage.getItem(modeStorageKey) === '1') input.stickMode = 1; } catch { /* Storage can be unavailable. */ }
 const throttleUp = () => input.stickMode === 2 ? 'W' : '↑';
 const throttleDown = () => input.stickMode === 2 ? 'S' : '↓';
 const tiltKeys = () => input.stickMode === 2 ? '방향키' : 'W/S · ←/→';
-let flight = createFlight();
-const clock = createFixedClock(dt => stepFlight(flight, input, dt));
+let flight = createFlight(arena);
+const clock = createFixedClock(dt => stepFlight(flight, input, dt, arena));
 const notice = element('notice');
 const arm = element('arm');
 const throttle = element('throttle');
@@ -73,15 +88,18 @@ function renderGuide() {
   if (now >= refusalUntil) meter.classList.remove('shake');
 }
 element('close-keyboard').addEventListener('click', () => keyboardOverlay.close());
-if (matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches) keyboardOverlay.showModal();
-let view: ReturnType<typeof createScene>;
-try { view = createScene(element('app')); }
-catch (error) {
-  const alert = element('scene-error'); alert.hidden = false;
-  alert.textContent = '3D 화면을 시작할 수 없습니다. WebGL을 지원하는 브라우저에서 다시 열어 주세요.';
-  throw error;
+let keyboardAcknowledged = false;
+element('close-keyboard').addEventListener('click', () => { keyboardAcknowledged = true; });
+let view: ReturnType<typeof createScene> | undefined;
+function ensureScene() {
+  if (view) { view.resize(); return; }
+  try { view = createScene(element('app'), arena); }
+  catch {
+    const alert = element('scene-error'); alert.hidden = false;
+    alert.textContent = '3D 화면을 시작할 수 없습니다. WebGL을 지원하는 브라우저에서 다시 열어 주세요. 스코어판·전술판은 사용할 수 있어요.';
+  }
 }
-const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyM', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
+const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyM', 'KeyN', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
 function renderHud() {
   renderGuide();
   const axes = axesFromKeys(input.keys, input.stickMode);
@@ -95,7 +113,7 @@ function renderHud() {
   tilt.textContent = `${(flight.roll * DEG).toFixed(1)}° / ${(flight.pitch * DEG).toFixed(1)}°`;
   speed.textContent = `${Math.hypot(flight.vel.x, flight.vel.y, flight.vel.z).toFixed(2)} m/s`;
   altitude.textContent = `${flight.pos.y.toFixed(2)} m`;
-  cameraLabel.textContent = CAMERA_NAMES[view.mode];
+  cameraLabel.textContent = CAMERA_NAMES[view?.mode ?? 1];
 }
 function renderMode() {
   for (const mode of [1, 2] as const) element(`mode-${mode}`).setAttribute('aria-pressed', String(input.stickMode === mode));
@@ -125,8 +143,9 @@ for (const mode of [1, 2] as const) element(`mode-${mode}`).addEventListener('cl
 });
 renderMode();
 window.addEventListener('keydown', e => {
+  if (tab !== 'fly') return;
   if (!keys.has(e.code) || e.ctrlKey || e.metaKey || e.altKey) return;
-  if (keyboardOverlay.open || (e.target instanceof HTMLElement && e.target.closest('button, summary'))) return;
+  if (keyboardOverlay.open || (e.target instanceof HTMLElement && e.target.closest('button, summary, a, input, textarea, select, [contenteditable]'))) return;
   e.preventDefault();
   if (document.hidden) return;
   input.keys.add(e.code);
@@ -137,6 +156,7 @@ window.addEventListener('keydown', e => {
     lastGroundHint = performance.now();
   }
   if (e.repeat) return;
+  if (e.code === 'KeyN') changeMap(mapIds[(mapIds.indexOf(mapId) + 1) % mapIds.length]);
   if (e.code === 'KeyM') changeStickMode(input.stickMode === 2 ? 1 : 2);
   if (e.code === 'Space') {
     const allowed = toggleArm(input);
@@ -146,14 +166,14 @@ window.addEventListener('keydown', e => {
   }
   if (e.code === 'Backspace') {
     successAt = undefined; toastUntil = 0; refusalUntil = 0; lastGroundHint = -Infinity;
-    loseFocus(input); flight = createFlight(); clock.reset(); notice.textContent = '출발점 초기화 · 스로틀 0% · DISARM';
+    loseFocus(input); flight = createFlight(arena); clock.reset(); notice.textContent = '출발점 초기화 · 스로틀 0% · DISARM';
   }
   const mode = Number(e.code.replace('Digit', ''));
-  if ([1, 2, 3, 5].includes(mode)) view.setMode(mode as CameraMode);
+  if ([1, 2, 3, 5].includes(mode)) view?.setMode(mode as CameraMode);
   renderHud();
 });
 window.addEventListener('keyup', e => {
-  if (keys.has(e.code)) { e.preventDefault(); releaseKey(input, e.code); }
+  if (tab === 'fly' && keys.has(e.code)) { e.preventDefault(); releaseKey(input, e.code); }
 });
 function safetyStop() {
   toastUntil = 0; refusalUntil = 0;
@@ -163,14 +183,72 @@ window.addEventListener('blur', safetyStop);
 document.addEventListener('visibilitychange', () => { if (document.hidden) safetyStop(); });
 const qa = Object.freeze({ state: () => ({
   stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
-  rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view.mode,
+  rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view?.mode ?? 1, arena: arenaSize(), tab,
 }) });
 Object.defineProperty(window, '__DRONE_QA', { value: qa, writable: false, configurable: false });
+const scoreView = mountScore(element('score-root'));
+const tacticsView = mountTactics(element('tactics-root'), arenaSize);
+function renderMap() {
+  for (const id of mapIds) element(`map-${id}`).setAttribute('aria-pressed', String(mapId === id));
+  const name = mapId === 'practice' ? '연습 경기장' : mapId === 'official' ? '실제 규격 경기장' : '큰 경기장';
+  element('arena-subtitle').textContent = `${name} ${arena.halfLength * 2} × ${arena.halfWidth * 2} m`;
+}
+function changeMap(next: MapId) {
+  if (tab !== 'fly') return;
+  if (input.armed) { showToast('착륙·시동 끈 뒤 바꿔요'); return; }
+  if (mapId === next) return;
+  loseFocus(input); clock.reset();
+  mapId = next; arena = ARENA_PRESETS[next].arena;
+  flight = createFlight(arena); view?.setArena(arena);
+  successAt = undefined; toastUntil = 0; refusalUntil = 0; lastGroundHint = -Infinity;
+  try { localStorage.setItem('drone-soccer-arena', next); } catch { /* Keep selection for this session. */ }
+  notice.textContent = '경기장 변경 · 출발점으로 이동 · 스로틀 0% · DISARM';
+  renderMap(); renderHud(); tacticsView.refresh();
+}
+for (const id of mapIds) element(`map-${id}`).addEventListener('click', () => {
+  changeMap(id); element(`map-${id}`).blur();
+});
 let lastTime: number | undefined;
+let frameId: number | undefined;
+function stopFrames() {
+  if (frameId !== undefined) cancelAnimationFrame(frameId);
+  frameId = undefined; lastTime = undefined; clock.reset();
+}
+function startFrames() {
+  if (tab === 'fly' && !document.hidden && frameId === undefined) frameId = requestAnimationFrame(frame);
+}
 function frame(time: number) {
+  frameId = undefined;
+  if (tab !== 'fly' || document.hidden) return;
   const elapsed = lastTime === undefined ? 0 : (time - lastTime) / 1000;
   lastTime = time;
-  if (!document.hidden) clock.advance(elapsed);
-  renderHud(); view.draw(flight, elapsed); requestAnimationFrame(frame);
+  clock.advance(elapsed);
+  renderHud(); view?.draw(flight, elapsed); startFrames();
 }
-renderHud(); requestAnimationFrame(frame);
+function selectTab(next: Tab) {
+  if (tab === 'fly' && next !== 'fly') safetyStop();
+  stopFrames(); tab = next;
+  element('app').hidden = next !== 'fly';
+  element('score-panel').hidden = next !== 'score';
+  element('tactics-panel').hidden = next !== 'tactics';
+  for (const name of ['fly', 'score', 'tactics'] as const) {
+    if (next === name) element(`tab-${name}`).setAttribute('aria-current', 'page');
+    else element(`tab-${name}`).removeAttribute('aria-current');
+  }
+  scoreView.setActive(next === 'score'); tacticsView.setActive(next === 'tactics');
+  if (next === 'fly') {
+    ensureScene(); renderHud(); startFrames();
+    if (!keyboardAcknowledged && matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches && !keyboardOverlay.open) keyboardOverlay.showModal();
+  } else if (keyboardOverlay.open) keyboardOverlay.close();
+}
+window.addEventListener('hashchange', () => selectTab(tabFromHash()));
+// Stop motors synchronously on navigation click, before the hashchange task runs.
+for (const name of ['fly', 'score', 'tactics'] as const) element(`tab-${name}`).addEventListener('click', () => selectTab(name));
+document.addEventListener('visibilitychange', () => { if (document.hidden) stopFrames(); else startFrames(); });
+window.addEventListener('storage', e => {
+  if (e.key !== 'drone-soccer-arena' || !mapIds.includes(e.newValue as MapId) || input.armed) return;
+  mapId = e.newValue as MapId; arena = ARENA_PRESETS[mapId].arena;
+  loseFocus(input); flight = createFlight(arena); clock.reset(); view?.setArena(arena);
+  renderMap(); renderHud(); tacticsView.refresh();
+});
+renderMap(); selectTab(tab);

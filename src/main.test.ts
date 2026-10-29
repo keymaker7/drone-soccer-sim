@@ -1,9 +1,12 @@
 import { C } from './sim/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+vi.mock('./score/view', () => ({ mountScore: () => ({ setActive: vi.fn() }) }));
+vi.mock('./tactics/view', () => ({ mountTactics: () => ({ setActive: vi.fn(), refresh: vi.fn() }) }));
+const sceneSpies = vi.hoisted(() => ({ draw: vi.fn(), setArena: vi.fn(), resize: vi.fn() }));
 vi.mock('./render/scene', () => ({
   CAMERA_NAMES: { 1: 'LOS' },
-  createScene: () => ({ mode: 1, draw: vi.fn(), setMode: vi.fn() }),
+  createScene: () => ({ mode: 1, draw: sceneSpies.draw, setMode: vi.fn(), setArena: sceneSpies.setArena, resize: sceneSpies.resize }),
 }));
 
 // Minimal DOM/event doubles exercise the real entry point without a new package.
@@ -29,7 +32,7 @@ class Element extends EventTarget {
 }
 let steps: Element[];
 let elements: Map<string, Element>;
-let win: EventTarget & { innerWidth: number; __DRONE_QA?: { state(): { stickMode: 1 | 2; armed: boolean; throttle: number; pos: { y: number } } } };
+let win: EventTarget & { innerWidth: number; location: {hash: string}; __DRONE_QA?: { state(): { stickMode: 1 | 2; armed: boolean; throttle: number; pos: { x: number; y: number }; arena: {length:number;width:number;height:number}; tab:string } } };
 let doc: EventTarget & { hidden: boolean; getElementById(id: string): Element };
 let frame: (time: number) => void;
 let now: number;
@@ -42,11 +45,11 @@ function tick(ms: number) {
   const end = now + ms;
   while (now < end) { now = Math.min(now + 16, end); frame(now); }
 }
-async function boot(width = 1440, coarse = false, hover = true, storage = { getItem: vi.fn((): string | null => null), setItem: vi.fn() }) {
-  vi.resetModules(); now = 0;
+async function boot(width = 1440, coarse = false, hover = true, storage = { getItem: vi.fn((_key: string): string | null => null), setItem: vi.fn() }, hash = '') {
+  vi.resetModules(); now = 0; frame = () => {};
   steps = [1, 2, 3, 4].map(step => { const item = new Element(); item.dataset.step = String(step); return item; });
   elements = new Map();
-  win = Object.assign(new EventTarget(), { innerWidth: width });
+  win = Object.assign(new EventTarget(), { innerWidth: width, location: { hash } });
   doc = Object.assign(new EventTarget(), { hidden: false, getElementById(id: string) {
     if (!elements.has(id)) elements.set(id, new Element());
     return el(id);
@@ -54,7 +57,8 @@ async function boot(width = 1440, coarse = false, hover = true, storage = { getI
   vi.stubGlobal('localStorage', storage);
   vi.stubGlobal('window', win); vi.stubGlobal('document', doc); vi.stubGlobal('HTMLElement', Element);
   vi.stubGlobal('performance', { now: () => now });
-  vi.stubGlobal('requestAnimationFrame', (callback: typeof frame) => { frame = callback; });
+  vi.stubGlobal('requestAnimationFrame', vi.fn((callback: typeof frame) => { frame = callback; return 1; }));
+  vi.stubGlobal('cancelAnimationFrame', vi.fn());
   vi.stubGlobal('matchMedia', (query: string) => ({ matches: query === '(pointer: coarse)' ? coarse : hover }));
   await import('./main'); frame(0);
 }
@@ -225,5 +229,53 @@ describe('FIX-4 모드 전환 및 실제 HUD 연결', () => {
     key('KeyQ'); key('KeyE'); tick(16);
     expect(el('flight-toast').textContent).toBe('');
     expect(win.__DRONE_QA!.state()).toMatchObject({ throttle: 0, stickMode: 2 });
+  });
+});
+
+
+describe('FIX-5 탭 안전과 맵 통합', () => {
+  function navigate(hash: string) { win.location.hash = hash; win.dispatchEvent(new Event('hashchange')); }
+  it('비행 탭을 떠나면 즉시 안전 정지, 키와 렌더 중단, 복귀해도 자동 재시동 없음', () => {
+    key('Space'); key('KeyW'); tick(1500);
+    expect(win.__DRONE_QA!.state().armed).toBe(true);
+    navigate('#score');
+    expect(win.__DRONE_QA!.state()).toMatchObject({tab:'score', armed:false, throttle:0});
+    expect(cancelAnimationFrame).toHaveBeenCalled();
+    const calls = sceneSpies.draw.mock.calls.length;
+    key('Space'); key('KeyW'); tick(1000);
+    expect(sceneSpies.draw.mock.calls.length).toBe(calls);
+    expect(win.__DRONE_QA!.state()).toMatchObject({armed:false, throttle:0});
+    navigate('#fly'); tick(16);
+    expect(win.__DRONE_QA!.state()).toMatchObject({tab:'fly', armed:false, throttle:0});
+  });
+  it('탭 클릭 자체에서 hashchange 이전에 DISARM', () => {
+    key('Space'); el('tab-tactics').dispatchEvent(new Event('click'));
+    expect(win.__DRONE_QA!.state()).toMatchObject({tab:'tactics', armed:false, throttle:0});
+  });
+  it('N과 버튼으로 3개 맵 전환, ARM 차단과 출발점/크기/저장 일치', () => {
+    expect(win.__DRONE_QA!.state().arena).toEqual({length:24,width:10.5,height:6});
+    key('Space'); key('KeyN');
+    expect(el('flight-toast').textContent).toBe('착륙·시동 끈 뒤 바꿔요');
+    expect(win.__DRONE_QA!.state().arena.length).toBe(24);
+    key('Space'); key('KeyN');
+    expect(win.__DRONE_QA!.state()).toMatchObject({arena:{length:32,width:14,height:6},pos:{x:-13.5},armed:false,throttle:0});
+    key('KeyN');
+    expect(win.__DRONE_QA!.state()).toMatchObject({arena:{length:16,width:7,height:4.5},pos:{x:-5.5}});
+    el('map-practice').dispatchEvent(new Event('click'));
+    expect(localStorage.setItem).toHaveBeenLastCalledWith('drone-soccer-arena','practice');
+    expect(sceneSpies.setArena).toHaveBeenCalled();
+  });
+  it.each(['#score','#tactics'])('직접 진입 %s 는 폰 덮개 없이 열리고 비행 키를 무시', async hash => {
+    await boot(390,true,false,{getItem:vi.fn(() => null),setItem:vi.fn()},hash);
+    expect(el('keyboard-overlay').open).toBe(false);
+    key('Space'); key('KeyW'); tick(100);
+    expect(win.__DRONE_QA!.state()).toMatchObject({tab:hash.slice(1),armed:false,throttle:0});
+    expect(el('app').hidden).toBe(true);
+  });
+  it('맵 저장 값을 복원하고 잘못된 값은 기본 맵', async () => {
+    await boot(1440,false,true,{getItem:vi.fn(key => key === 'drone-soccer-arena' ? 'official' : null),setItem:vi.fn()});
+    expect(win.__DRONE_QA!.state().arena.length).toBe(16);
+    const snapshot = win.__DRONE_QA!.state(); snapshot.arena.length = 1000;
+    expect(win.__DRONE_QA!.state().arena.length).toBe(16);
   });
 });

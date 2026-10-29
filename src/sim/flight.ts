@@ -1,12 +1,12 @@
-import { C, MAX_THRUST } from './constants';
+import { C, MAX_THRUST, DEFAULT_ARENA, layoutFor, type Arena } from './constants';
 import { readInput, type InputState } from './input';
 export interface Vec3 { x: number; y: number; z: number }
 export interface FlightState {
   pos: Vec3; vel: Vec3; roll: number; pitch: number; yaw: number;
   rollRate: number; pitchRate: number;
 }
-export const createFlight = (): FlightState => ({
-  pos: { ...C.start }, vel: { x: 0, y: 0, z: 0 },
+export const createFlight = (arena: Arena = DEFAULT_ARENA): FlightState => ({
+  pos: { ...layoutFor(arena).start }, vel: { x: 0, y: 0, z: 0 },
   roll: 0, pitch: 0, yaw: 0, rollRate: 0, pitchRate: 0,
 });
 export function acceleration(s: FlightState, input: InputState): Vec3 {
@@ -21,11 +21,11 @@ export function acceleration(s: FlightState, input: InputState): Vec3 {
     z: thrust * (-Math.sin(s.yaw) * x + Math.cos(s.yaw) * z) - C.linearDrag * s.vel.z / C.mass,
   };
 }
-export function collide(s: FlightState): void {
+export function collide(s: FlightState, arena: Arena = DEFAULT_ARENA): void {
   const bounds: Record<keyof Vec3, [number, number]> = {
-    x: [-C.arena.halfLength + C.radius, C.arena.halfLength - C.radius],
-    y: [C.radius, C.arena.height - C.radius],
-    z: [-C.arena.halfWidth + C.radius, C.arena.halfWidth - C.radius],
+    x: [-arena.halfLength + C.radius, arena.halfLength - C.radius],
+    y: [C.radius, arena.height - C.radius],
+    z: [-arena.halfWidth + C.radius, arena.halfWidth - C.radius],
   };
   for (const axis of ['x', 'y', 'z'] as const) {
     const [lo, hi] = bounds[axis];
@@ -33,7 +33,7 @@ export function collide(s: FlightState): void {
     if (s.pos[axis] > hi) { s.pos[axis] = hi; if (s.vel[axis] > 0) s.vel[axis] *= -C.restitution; }
   }
 }
-export function stepFlight(s: FlightState, input: InputState, dt: number): void {
+export function stepFlight(s: FlightState, input: InputState, dt: number, arena: Arena = DEFAULT_ARENA): void {
   const stick = readInput(input, dt);
   // Exact first-order response; DISARM bypasses the lag and cuts thrust immediately.
   input.motorThrottle = input.armed
@@ -58,5 +58,5 @@ export function stepFlight(s: FlightState, input: InputState, dt: number): void 
   if (input.armed) s.yaw = (s.yaw + stick.yaw * C.yawRate * dt) % (Math.PI * 2);
   const a = acceleration(s, input);
   for (const axis of ['x', 'y', 'z'] as const) { s.vel[axis] += a[axis] * dt; s.pos[axis] += s.vel[axis] * dt; }
-  collide(s);
+  collide(s, arena);
 }

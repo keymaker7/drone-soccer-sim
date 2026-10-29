@@ -50,3 +50,30 @@ it.each<CameraMode>([1, 2, 3, 5])('updates both goals using actual camera %s', m
     expect(goal.material.opacity).toBeCloseTo(blocked ? 0.25 : 1);
   }
 });
+
+it('rebuilds the arena, disposes old geometry and updates camera and occlusion layout', async () => {
+  const { ARENA_PRESETS, layoutFor } = await import('../sim/constants');
+  const view = setup();
+  view.draw(createFlight(), 0);
+  const oldGoalGeometry = goals()[0].geometry;
+  const dispose = vi.spyOn(oldGoalGeometry, 'dispose');
+  for (const { arena } of Object.values(ARENA_PRESETS)) {
+    view.setArena(arena);
+    view.setMode(1);
+    const flight = createFlight(arena); flight.pos.y = 2.9;
+    view.draw(flight, 0.15);
+    const camera = captured.render.mock.lastCall![1] as THREE.PerspectiveCamera;
+    const layout = layoutFor(arena);
+    expect(camera.position.x).toBe(layout.camera.los.x);
+    expect(goals()).toHaveLength(2);
+    expect(goals().map(goal => goal.position.x)).toEqual([-layout.goal.x, layout.goal.x]);
+    for (const goal of goals()) {
+      const blocked = segmentIntersectsRing(camera.position, flight.pos, { ...layout.goal, x: goal.position.x });
+      expect(goal.material.opacity).toBe(blocked ? 0.25 : 1);
+    }
+    view.setMode(5); view.draw(flight);
+    expect(camera.position.y).toBe(layout.camera.referee.y);
+    expect(camera.position.z).toBe(layout.camera.referee.z);
+  }
+  expect(dispose).toHaveBeenCalledTimes(1);
+});

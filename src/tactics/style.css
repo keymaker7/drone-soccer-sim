@@ -1,0 +1,30 @@
+.tactics-workspace { max-width: 1600px; margin: 0 auto; padding: clamp(16px, 3vw, 40px); color: #e6f1fa; font-family: system-ui, sans-serif; }
+.tactics-workspace * { box-sizing: border-box; }
+.tactics-heading { display: flex; align-items: center; justify-content: space-between; gap: 20px; margin-bottom: 24px; }
+.tactics-eyebrow { color: #72d4f3; font-size: 11px; font-weight: 700; letter-spacing: .16em; margin: 0 0 10px; }
+.tactics-heading h1 { margin: 0; font-size: clamp(24px, 3vw, 38px); letter-spacing: -.05em; }
+.tactics-heading p:not(.tactics-eyebrow) { color: #9fb4c7; font-size: 14px; margin: 9px 0 0; }
+.tactics-workspace button, .tactics-workspace select { min-height: 44px; border: 1px solid #3b5267; border-radius: 8px; background: #13283b; color: #dceaf5; font: 600 13px system-ui, sans-serif; padding: 10px 14px; cursor: pointer; }
+.tactics-workspace button:hover { background: #23425b; border-color: #79cbe8; }
+.tactics-workspace button:focus-visible, .tactics-workspace select:focus-visible { outline: 3px solid #a7eaff; outline-offset: 3px; }
+.tactics-workspace button[aria-pressed="true"] { background: #163e53; border-color: #83def9; color: #b3edff; }
+.tactics-toolbar, .tactics-tool-group { display: flex; gap: 6px; flex-wrap: wrap; align-items: center; }
+.tactics-toolbar { gap: 14px; margin-bottom: 16px; }
+.tactics-colors { border-left: 1px solid #3b5267; padding-left: 14px; }
+.tactics-colors button { width: 44px; padding: 8px; }
+.tactics-colors span { display: block; border-radius: 50%; width: 20px; height: 20px; margin: auto; background: var(--ink); }
+.tactics-field-wrap { overflow: hidden; border-radius: 12px; border: 1px solid #425d73; background: #091827; }
+.tactics-field { display: block; width: 100%; touch-action: none; cursor: grab; }
+.tactics-field-caption { display: flex; justify-content: space-between; gap: 10px; color: #93b1c8; font-size: 12px; margin: 10px 2px 24px; }
+.tactics-controls { display: flex; justify-content: space-between; gap: 24px; flex-wrap: wrap; }
+.tactics-label { display: block; color: #9fb4c7; font-size: 12px; margin-bottom: 10px; }
+.tactics-slots { display: flex; gap: 10px; flex-wrap: wrap; }
+.tactics-slots > div { display: flex; gap: 3px; }
+.tactics-slots button { font-size: 12px; padding: 9px 10px; }
+.tactics-legend { display: flex; gap: 10px 22px; flex-wrap: wrap; padding-top: 24px; margin-top: 24px; border-top: 1px solid #2a4255; color: #b0c5d6; font-size: 12px; }
+.tactics-legend span { display: flex; align-items: center; gap: 6px; }
+.tactics-legend i { height: 8px; width: 8px; border-radius: 50%; }
+.tactics-status { min-height: 24px; color: #8fd5ef; font-size: 13px; margin-bottom: 0; }
+.tactics-keyboard { display: flex; flex-wrap: wrap; align-items: center; gap: 12px; margin-top: 18px; color: #9fb4c7; font-size: 12px; }
+.tactics-keyboard select { margin-left: 8px; }
+@media (max-width: 640px) { .tactics-heading { align-items: flex-start; flex-direction: column; } .tactics-heading > button { align-self: flex-end; } .tactics-toolbar { gap: 8px; } .tactics-workspace button { padding: 9px 11px; } .tactics-field-caption { flex-direction: column; } .tactics-controls { gap: 20px; } }

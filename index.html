@@ -1,14 +1,25 @@
 <!doctype html>
 <html lang="ko">
-<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>드론축구 · LOS 비행 연습</title></head>
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>드론축구 · 비행과 경기 운영</title></head>
 <body>
-  <main id="app">
-    <header><span class="eyebrow">DRONE SOCCER / STAGE 01</span><h1>LOS 비행 연습</h1><p id="arena-subtitle"></p></header>
+  <nav class="workspace-tabs" aria-label="드론축구 작업 공간">
+    <a id="tab-fly" href="#fly" aria-current="page">비행 연습</a>
+    <a id="tab-score" href="#score">스코어판</a>
+    <a id="tab-tactics" href="#tactics">전술판</a>
+  </nav>
+  <main id="app" aria-label="비행 연습">
+    <header><span class="eyebrow">DRONE SOCCER / FLIGHT LAB</span><h1>LOS 비행 연습</h1><p id="arena-subtitle"></p></header>
     <details id="help" open><summary>조작 키 안내</summary>
       <div class="mode-toggle" role="group" aria-label="조종기 스틱 모드">
         <button id="mode-2" type="button" aria-pressed="true">모드 2</button>
         <button id="mode-1" type="button" aria-pressed="false">모드 1</button>
-      </div><span class="mode-hint">M 키로 전환 · 시동을 끈 상태에서</span><dl>
+      </div><span class="mode-hint">M 키로 전환 · 시동을 끈 상태에서</span>
+      <div class="map-heading">경기장 선택 <span>N 키로 전환</span></div>
+      <div class="map-toggle" role="group" aria-label="경기장 크기">
+        <button id="map-official" type="button" aria-pressed="false">실제 규격<small>16 × 7 × 4.5</small></button>
+        <button id="map-practice" type="button" aria-pressed="true">연습<small>24 × 10.5 × 6</small></button>
+        <button id="map-large" type="button" aria-pressed="false">큰 맵<small>32 × 14 × 6</small></button>
+      </div><dl>
       <dt id="throttle-keys">W / S</dt><dd>스로틀 올림 / 내림 · 놓으면 유지<br>55% 근처에선 천천히 움직여요<br>짧게 누르면 미세 조정 · Shift는 더 천천히</dd>
       <dt id="pitch-keys">↑ / ↓</dt><dd>전진 / 후진 기울기</dd><dt>← / →</dt><dd>왼쪽 / 오른쪽 기울기</dd>
       <dt>A / D</dt><dd>좌 / 우 회전</dd><dt>Space</dt><dd>ARM / DISARM · 스로틀 5% 이하</dd>
@@ -45,5 +56,13 @@
       <button id="close-keyboard" type="button">닫기</button>
     </dialog>
     <div id="scene-error" role="alert" hidden></div>
+  </main>
+  <main id="score-panel" class="workspace-panel" aria-label="스코어판" hidden>
+    <div class="workspace-heading"><span class="eyebrow">DRONE SOCCER / MATCH CONTROL</span><a href="#score" target="_blank" rel="noopener">새 창으로 열기 ↗</a></div>
+    <div id="score-root"></div>
+  </main>
+  <main id="tactics-panel" class="workspace-panel" aria-label="전술판" hidden>
+    <div class="workspace-heading"><span class="eyebrow">DRONE SOCCER / TACTICS STUDIO</span><a href="#tactics" target="_blank" rel="noopener">새 창으로 열기 ↗</a></div>
+    <div id="tactics-root"></div>
   </main><script type="module" src="/src/main.ts"></script>
 </body></html>
