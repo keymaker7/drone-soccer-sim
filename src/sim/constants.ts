@@ -11,7 +11,13 @@ export const C = {
   step: 1 / 120, maxFrameTime: 0.25, clockEpsilon: 1e-10,
   maxTilt: 35 * Math.PI / 180, attitudeKp: 484, attitudeKd: 44,
   yawRate: 160 * Math.PI / 180, linearDrag: 0.22, restitution: 0.35,
-  throttleRate: 0.9, fineThrottleRate: 0.25, armThreshold: 0.05,
+  throttleBands: [
+    { min: 0, max: 0.4, rate: 0.9 },
+    { min: 0.4, max: 0.7, rate: 0.18 },
+    { min: 0.7, max: 1, rate: 0.35 },
+  ],
+  fineThrottleRate: 0.08, throttleTapSeconds: 0.12, throttleTapScale: 0.5,
+  motorTimeConstant: 0.08, armThreshold: 0.05,
   camera: {
     los: { x: -arena.halfLength - 1.5, y: 1.7, z: 0 },
     overview: { x: -arena.halfLength * 1.1, y: arena.height * 1.6, z: arena.halfWidth * 4 },

@@ -10,7 +10,7 @@ export const createFlight = (): FlightState => ({
   roll: 0, pitch: 0, yaw: 0, rollRate: 0, pitchRate: 0,
 });
 export function acceleration(s: FlightState, input: InputState): Vec3 {
-  const thrust = input.armed ? input.throttle * MAX_THRUST / C.mass : 0;
+  const thrust = input.armed ? input.motorThrottle * MAX_THRUST / C.mass : 0;
   // R_y(yaw) R_z(pitch) R_x(roll) applied to local +Y motor thrust.
   const x = -Math.sin(s.pitch) * Math.cos(s.roll);
   const y = Math.cos(s.pitch) * Math.cos(s.roll);
@@ -35,6 +35,10 @@ export function collide(s: FlightState): void {
 }
 export function stepFlight(s: FlightState, input: InputState, dt: number): void {
   const stick = readInput(input, dt);
+  // Exact first-order response; DISARM bypasses the lag and cuts thrust immediately.
+  input.motorThrottle = input.armed
+    ? input.motorThrottle + (input.throttle - input.motorThrottle) * -Math.expm1(-dt / C.motorTimeConstant)
+    : 0;
   // Limit the combined tilt vector to 35 degrees, including diagonal stick input.
   const magnitude = Math.max(1, Math.hypot(stick.pitch, stick.roll));
   for (const axis of ['pitch', 'roll'] as const) {

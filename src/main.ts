@@ -1,7 +1,7 @@
 import './style.css';
 import { C, DEG } from './sim/constants';
 import { createFlight, stepFlight } from './sim/flight';
-import { createInput, loseFocus, toggleArm } from './sim/input';
+import { createInput, loseFocus, releaseKey, toggleArm } from './sim/input';
 import { guideStep, needsTakeoff } from './sim/guide';
 import { createFixedClock } from './sim/clock';
 import { CAMERA_NAMES, createScene, type CameraMode } from './render/scene';
@@ -114,7 +114,7 @@ window.addEventListener('keydown', e => {
   renderHud();
 });
 window.addEventListener('keyup', e => {
-  if (keys.has(e.code)) { e.preventDefault(); input.keys.delete(e.code); }
+  if (keys.has(e.code)) { e.preventDefault(); releaseKey(input, e.code); }
 });
 function safetyStop() {
   toastUntil = 0; refusalUntil = 0;

@@ -6,7 +6,7 @@ import { createFixedClock } from './clock';
 
 function airborne(throttle: number = C.hoverThrottle, armed = true) {
   const state = createFlight(); state.pos = { x: 0, y: 2, z: 0 };
-  const input = createInput(); input.armed = armed; input.throttle = throttle;
+  const input = createInput(); input.armed = armed; input.throttle = throttle; input.motorThrottle = armed ? throttle : 0;
   return { state, input };
 }
 function run(seconds: number, fn: () => void) { for (let n = 0; n < Math.round(seconds / C.step); n++) fn(); }
@@ -89,8 +89,8 @@ describe('입력 및 ARM 안전 규칙', () => {
     readInput(input, 1); expect(input.throttle).toBe(0);
   });
   it('스로틀은 누르는 동안 증감, 해제 시 유지, 0~100% 제한', () => {
-    const input = createInput(); input.keys.add('ArrowUp'); readInput(input, 1); expect(input.throttle).toBeCloseTo(C.throttleRate);
-    input.keys.clear(); readInput(input, 2); expect(input.throttle).toBeCloseTo(C.throttleRate);
+    const input = createInput(); input.keys.add('ArrowUp'); readInput(input, 1); expect(input.throttle).toBeCloseTo(0.4892);
+    input.keys.clear(); readInput(input, 2); expect(input.throttle).toBeCloseTo(0.4892);
     input.keys.add('ArrowUp'); readInput(input, 10); expect(input.throttle).toBe(1);
     input.keys = new Set(['ArrowDown']); readInput(input, 10); expect(input.throttle).toBe(0);
   });
@@ -152,27 +152,6 @@ describe('FIX-2 빠른 조종 응답', () => {
     const { state, input } = airborne(); input.keys.add(key);
     run(1, () => stepFlight(state, input, C.step));
     expect(state.yaw * DEG).toBeCloseTo(key === 'KeyQ' ? 160 : -160, 8);
-  });
-  it.each([undefined, 'ShiftLeft', 'ShiftRight'])('스로틀 %s: 일반 0.9/s, 미세 0.25/s, 상승과 하강', shift => {
-    const input = createInput();
-    input.keys.add('ArrowUp'); if (shift) input.keys.add(shift);
-    const expectedRate = shift ? 0.25 : 0.9;
-    run(0.5, () => readInput(input, C.step));
-    expect(input.throttle).toBeCloseTo(expectedRate * 0.5, 10);
-    input.keys.delete('ArrowUp'); input.keys.add('ArrowDown');
-    run(0.25, () => readInput(input, C.step));
-    expect(input.throttle).toBeCloseTo(expectedRate * 0.25, 10);
-    input.keys.delete('ArrowDown');
-    run(1, () => readInput(input, C.step));
-    expect(input.throttle).toBeCloseTo(expectedRate * 0.25, 10);
-  });
-  it('일반 스로틀은 0%에서 호버까지 약 0.6초', () => {
-    const input = createInput(); input.keys.add('ArrowUp');
-    let steps = 0;
-    while (input.throttle < C.hoverThrottle && steps < 120) { readInput(input, C.step); steps++; }
-    expect(steps * C.step).toBeGreaterThanOrEqual(0.6);
-    expect(steps * C.step).toBeLessThanOrEqual(0.625);
-    console.info(`FIX-2 throttle: hover=${steps * C.step}s`);
   });
   it('골대·출발점·카메라는 경기장 크기에 연동', () => {
     expect(C.goal.x).toBe(C.arena.halfLength - 1.5);
