@@ -1,12 +1,14 @@
+import { createStick, stepStick, type StickState } from './stick';
 import type { ThrottleMode } from './climb';
 import { C } from './constants';
 import { axesFromKeys, type StickMode } from './keymap';
 export interface InputState {
+  stick: StickState;
   throttleMode: ThrottleMode; climb: -1 | 0 | 1; fine: boolean; climbIntegral: number;
   stickMode: StickMode; armed: boolean; throttle: number; motorThrottle: number; keys: Set<string>;
   throttleDirection: number; throttleHeldSeconds: number;
 }
-export const createInput = (throttleMode: ThrottleMode = 'easy'): InputState => ({ throttleMode, climb: 0, fine: false, climbIntegral: 0, stickMode: 2, armed: false, throttle: 0, motorThrottle: 0, keys: new Set(), throttleDirection: 0, throttleHeldSeconds: 0 });
+export const createInput = (throttleMode: ThrottleMode = 'easy'): InputState => ({ stick: createStick(), throttleMode, climb: 0, fine: false, climbIntegral: 0, stickMode: 2, armed: false, throttle: 0, motorThrottle: 0, keys: new Set(), throttleDirection: 0, throttleHeldSeconds: 0 });
 export function toggleArm(input: InputState): boolean {
   if (input.armed) { input.armed = false; input.motorThrottle = 0; input.climbIntegral = 0; return true; }
   if (input.throttleMode === 'easy'
@@ -17,6 +19,7 @@ export function toggleArm(input: InputState): boolean {
 }
 // Shared by blur, hidden visibility and reset: held keys must not survive focus loss.
 export function loseFocus(input: InputState): void {
+  input.stick = createStick();
   input.armed = false; input.throttle = 0; input.motorThrottle = 0; input.keys.clear();
   input.throttleDirection = 0; input.throttleHeldSeconds = 0;
   input.climb = 0; input.fine = false; input.climbIntegral = 0;
@@ -25,7 +28,8 @@ export function readInput(input: InputState, dt: number) {
   const { throttle: direction, pitch, roll, yaw } = axesFromKeys(input.keys, input.stickMode);
   input.climb = direction as -1 | 0 | 1;
   input.fine = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');
-  if (input.throttleMode === 'easy') return { pitch, roll, yaw };
+  input.stick = stepStick(input.stick, { pitch, roll, yaw }, dt, input.fine);
+  if (input.throttleMode === 'easy') return input.stick;
   if (direction !== input.throttleDirection || direction === 0) input.throttleHeldSeconds = 0;
   input.throttleDirection = direction;
   if (direction !== 0) {
@@ -51,7 +55,7 @@ export function readInput(input: InputState, dt: number) {
     }
     input.throttleHeldSeconds += dt;
   }
-  return { pitch, roll, yaw };
+  return input.stick;
 }
 
 export function releaseKey(input: InputState, code: string): void {

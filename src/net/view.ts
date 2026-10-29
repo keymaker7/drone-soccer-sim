@@ -1,3 +1,4 @@
+import { createStick } from '../sim/stick';
 import './style.css';
 import { ARENA_PRESETS, DEFAULT_ARENA } from '../sim/constants';
 import { changeThrottleMode, createInput, loadThrottleMode, loseFocus, readInput, releaseKey, saveThrottleMode, toggleArm } from '../sim/input';
@@ -97,7 +98,7 @@ export function mountNet(root: HTMLElement) {
       find<HTMLSelectElement>('map').addEventListener('change', configure);
     }
     if (page === 'flight') {
-      for (const mode of [1,2] as const) button(`mode-${mode}`, () => { if (input.armed) { message = '착륙하고 시동을 끈 뒤 모드를 바꿔요.'; } else { input.stickMode = mode; input.keys.clear(); input.throttleDirection = 0; input.throttleHeldSeconds = 0; message = ''; } find(`mode-${mode}`).blur(); refresh(); });
+      for (const mode of [1,2] as const) button(`mode-${mode}`, () => { if (input.armed) { message = '착륙하고 시동을 끈 뒤 모드를 바꿔요.'; } else { input.stickMode = mode; input.stick = createStick(); input.keys.clear(); input.throttleDirection = 0; input.throttleHeldSeconds = 0; message = ''; } find(`mode-${mode}`).blur(); refresh(); });
       for (const mode of ['easy','manual'] as const) button(`throttle-${mode}`, () => { setThrottleMode(mode); find(`throttle-${mode}`).blur(); });
       button('arm', () => { armToggle(); find('arm').blur(); });
       button('stop', () => { safeStop(); find('stop').blur(); refresh(); });
@@ -109,7 +110,7 @@ export function mountNet(root: HTMLElement) {
     return `<section class="net-room-board"><p class="net-kicker">ROOM CODE / 학생에게 알려 주세요</p><strong class="net-room-code">${escape(session?.room ?? '')}</strong><button id="net-copy-url" class="net-quiet" type="button">참가 주소 복사 ↗</button><p class="net-room-url">${escape(joinUrl())}</p></section><div class="net-settings"><label>경기 인원<select id="net-size"><option value="3">3 : 3</option><option value="5">5 : 5</option></select></label><label>경기장 크기<select id="net-map">${Object.entries(ARENA_PRESETS).map(([key,preset]) => `<option value="${key}" ${key === 'practice' ? 'selected' : ''}>${preset.label}</option>`).join('')}</select></label><p class="net-muted">인원·크기는 참가자가 없을 때 바꿀 수 있어요.</p></div><section class="net-roster-section"><h2>참가자 <span id="net-count">0 / 6</span></h2><div id="net-roster" class="net-roster"></div></section><button id="net-disarm" class="net-danger" type="button">모두 시동 끄기 · DISARM</button>`;
   }
   function flightMarkup() {
-    return `<div class="net-flight-hud"><div class="net-pilot-label" id="net-pilot-label"></div><div class="net-flight-status"><button id="net-arm" class="net-quiet" type="button">DISARM · 시동 꺼짐</button><button id="net-stop" class="net-danger" type="button">안전 정지</button></div><div class="net-throttle"><label for="net-meter"><span id="net-throttle-label">추력</span> <strong id="net-throttle">0%</strong></label><meter id="net-meter" min="0" max="100" value="0"></meter><span id="net-altitude">높이 0.20 m</span><span id="net-vertical-speed">수직 속도 0.0 m/s</span></div></div><div class="net-flight-scroll" tabindex="0" aria-label="비행 조작 안내"><div class="net-mode"><button id="net-mode-2" type="button" aria-pressed="true">모드 2 · 기본</button><button id="net-mode-1" type="button" aria-pressed="false">모드 1</button></div><div class="net-sticks">${['left','right'].map(side => `<div><span id="net-${side}-label"></span><div class="net-stick-well"><i id="net-${side}-dot"></i></div><span id="net-${side}-keys"></span></div>`).join('')}</div><section class="net-guide" id="net-guide"><p class="net-kicker">FIRST FLIGHT / <span id="net-guide-progress">01 / 04</span></p><h2>처음이면 이렇게 해요</h2><ol><li id="net-step-1"></li><li id="net-step-2">Space · 시동 걸기</li><li id="net-step-3"></li><li id="net-step-4">방향 조종 · 기울여 보기</li></ol><strong id="net-guide-hint"></strong></section><details class="net-safety"><summary>조작과 안전 규칙</summary><div class="net-throttle-mode" role="group" aria-label="스로틀 방식"><span>스로틀</span><button id="net-throttle-easy" type="button">쉬움</button><button id="net-throttle-manual" type="button">실제</button></div><p id="net-throttle-help"></p><p>Space 시동 켜기·끄기 · M 조작 모드 · T 스로틀 방식<br>A / D 방향 돌리기 · ← / → 좌우 기울이기</p><p id="net-arm-help"></p><p>창·탭을 떠나면 즉시 시동이 꺼져요.<br>입력이 1초 끊기면 선생님 PC도 시동을 꺼요.</p></details></div>`;
+    return `<div class="net-flight-hud"><div class="net-pilot-label" id="net-pilot-label"></div><div class="net-flight-status"><button id="net-arm" class="net-quiet" type="button">DISARM · 시동 꺼짐</button><button id="net-stop" class="net-danger" type="button">안전 정지</button></div><div class="net-throttle"><label for="net-meter"><span id="net-throttle-label">추력</span> <strong id="net-throttle">0%</strong></label><meter id="net-meter" min="0" max="100" value="0"></meter><span id="net-altitude">높이 0.20 m</span><span id="net-vertical-speed">수직 속도 0.0 m/s</span></div></div><div class="net-flight-scroll" tabindex="0" aria-label="비행 조작 안내"><div class="net-mode"><button id="net-mode-2" type="button" aria-pressed="true">모드 2 · 기본</button><button id="net-mode-1" type="button" aria-pressed="false">모드 1</button></div><div class="net-sticks">${['left','right'].map(side => `<div><span id="net-${side}-label"></span><div class="net-stick-well"><i id="net-${side}-dot"></i></div><span id="net-${side}-keys"></span></div>`).join('')}</div><section class="net-guide" id="net-guide"><p class="net-kicker">FIRST FLIGHT / <span id="net-guide-progress">01 / 04</span></p><h2>처음이면 이렇게 해요</h2><ol><li id="net-step-1"></li><li id="net-step-2">Space · 시동 걸기</li><li id="net-step-3"></li><li id="net-step-4">방향 조종 · 기울여 보기</li></ol><strong id="net-guide-hint"></strong></section><details class="net-safety"><summary>조작과 안전 규칙</summary><div class="net-throttle-mode" role="group" aria-label="스로틀 방식"><span>스로틀</span><button id="net-throttle-easy" type="button">쉬움</button><button id="net-throttle-manual" type="button">실제</button></div><p id="net-throttle-help"></p><p>Space 시동 켜기·끄기 · M 조작 모드 · T 스로틀 방식<br>A / D 방향 돌리기 · ← / → 좌우 기울이기</p><p>짧게 톡 = 살짝, 꾹 = 끝까지 · Shift = 절반만</p><p id="net-arm-help"></p><p>창·탭을 떠나면 즉시 시동이 꺼져요.<br>입력이 1초 끊기면 선생님 PC도 시동을 꺼요.</p></details></div>`;
   }
   function joinUrl() { return `${location.origin}${location.pathname}#join=${session?.room ?? roomDraft}`; }
   function handleError(error: unknown) { message = session?.error || (error instanceof Error ? error.message : '연결을 시작하지 못했어요.'); refresh(); }
@@ -168,7 +169,7 @@ export function mountNet(root: HTMLElement) {
     else message = '';
     sendInput(); refresh();
   }
-  function sendInput() { const { pitch, roll, yaw, throttle } = axesFromKeys(input.keys,input.stickMode); if (page === 'flight') client()?.sendInput({ axes: {pitch, roll, yaw}, throttle: input.throttle, armed: input.armed, throttleMode: input.throttleMode, climb: throttle as -1|0|1, fine: input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') }); }
+  function sendInput() { const { pitch, roll, yaw } = input.stick; const { throttle } = axesFromKeys(input.keys,input.stickMode); if (page === 'flight') client()?.sendInput({ axes: {pitch, roll, yaw}, throttle: input.throttle, armed: input.armed, throttleMode: input.throttleMode, climb: throttle as -1|0|1, fine: input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') }); }
   function refresh() {
     const error = session?.error || message || (client()?.status === 'closed' ? '방이 닫혔어요' : '');
     if (find('error')) { find('error').hidden = !error; find('error').textContent = error; }
@@ -201,7 +202,7 @@ export function mountNet(root: HTMLElement) {
     find('vertical-speed').textContent = `${vy > 0 ? '상승 +' : vy < 0 ? '하강 −' : '수직 속도 '}${Math.abs(vy).toFixed(1)} m/s`;
     for (const throttleMode of ['easy','manual']) find(`throttle-${throttleMode}`).setAttribute('aria-pressed', String(input.throttleMode === throttleMode));
     find('altitude').textContent = `높이 ${(drone?.y ?? .2).toFixed(2)} m`;
-    const mode = input.stickMode; const axes = axesFromKeys(input.keys,mode);
+    const mode = input.stickMode; const axes = { ...axesFromKeys(input.keys,mode), ...input.stick };
     for (const m of [1,2]) find(`mode-${m}`).setAttribute('aria-pressed', String(mode === m));
     find('left-label').textContent = `왼쪽 · ${mode === 2 ? '스로틀' : '피치'} / 요`; find('right-label').textContent = `오른쪽 · ${mode === 1 ? '스로틀' : '피치'} / 롤`;
     find('left-keys').textContent = 'W / S · A / D'; find('right-keys').textContent = '↑ / ↓ · ← / →';
@@ -211,7 +212,7 @@ export function mountNet(root: HTMLElement) {
     const down = mode === 2 ? 'S' : '↓'; const up = mode === 2 ? 'W' : '↑';
     find('step-1').textContent = easy ? `${up} · 올림 키에서 손 떼기` : `${down} · 스로틀 0%로 내리기`;
     find('step-3').textContent = easy ? `${up} 꾹 — 떠올라요, 떼면 천천히 내려와요` : `${up} · 약 55%까지 올리기`;
-    find('step-4').textContent = `${mode === 2 ? '방향키' : 'W / S · ← / →'} · 기울여 보기`;
+    find('step-4').textContent = `${mode === 2 ? '방향키' : 'W / S · ← / →'} · 기울여 보기 · 짧게 톡 = 살짝, 꾹 = 끝까지 · Shift = 절반만`;
     find('throttle-help').textContent = easy ? `${up} 꾹: 올라가기 · 손 떼기: 천천히 내려오기 · ${down}: 빠르게 내려오기 · Shift + ${up}: 천천히 올라가기` : '스로틀은 키를 놓아도 유지돼요. Shift + 스로틀 키로 천천히 조절해요.';
     find('arm-help').textContent = easy ? `${up} 올림 키에서 손을 뗀 뒤 Space로 시동을 걸어요. 스로틀 방식은 시동을 끈 상태에서만 바꿔요.` : '스로틀 5% 이하에서만 시동이 걸려요. 스로틀 방식은 시동을 끈 상태에서만 바꿔요.';
     const step = guideStep({ armed: input.armed, throttle: easy ? (input.keys.has(mode === 2 ? 'KeyW' : 'ArrowUp') ? 1 : 0) : input.throttle, altitude: drone?.y ?? .2 });
@@ -266,6 +267,6 @@ export function mountNet(root: HTMLElement) {
   render(); applyHash();
   return {
     setActive(value: boolean) { active = value; if (!value) { safeStop(); cancelAnimationFrame(frameId); frameId=0; previous=0; } else { const preferred = loadThrottleMode(); if (!input.armed && preferred !== input.throttleMode) changeThrottleMode(input, preferred); applyHash(); if (page === 'flight') refreshFlight(); resetLiveScroll(); scene?.resize(); if (!frameId) frameId = requestAnimationFrame(frame); } },
-    state: () => ({ throttleMode: input.throttleMode, vy: client()?.drones.find(d => d.id === client()?.myId)?.vy ?? 0, role: session ? isHost() ? 'host' : 'client' : null, room: session?.room ?? '', peers: stats.peers, rttMs: stats.rttMs, linkType: stats.linkType, statesPerSec: stats.statesPerSec, disconnects: stats.disconnects, drones: session?.drones.map(d => ({...d})) ?? [], myId: client()?.myId ?? null }),
+    state: () => ({ stick: { ...input.stick }, throttleMode: input.throttleMode, vy: client()?.drones.find(d => d.id === client()?.myId)?.vy ?? 0, role: session ? isHost() ? 'host' : 'client' : null, room: session?.room ?? '', peers: stats.peers, rttMs: stats.rttMs, linkType: stats.linkType, statesPerSec: stats.statesPerSec, disconnects: stats.disconnects, drones: session?.drones.map(d => ({...d})) ?? [], myId: client()?.myId ?? null }),
   };
 }

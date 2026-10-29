@@ -116,7 +116,7 @@ describe('120 Hz accumulator', () => {
 });
 
 describe('FIX-2 빠른 조종 응답', () => {
-  it.each(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])('%s 0.20초 안에 31.5° 기울기, 0.30초 안에 복귀, 오버슈트 및 떨림 없음', key => {
+  it.each(['ArrowUp', 'ArrowDown', 'ArrowLeft', 'ArrowRight'])('%s 0.50초 안에 31.5° 기울기, 0.30초 안에 복귀, 오버슈트 및 떨림 없음', key => {
     const { state, input } = airborne();
     const axis = key === 'ArrowUp' || key === 'ArrowDown' ? 'pitch' : 'roll';
     input.keys.add(key);
@@ -132,7 +132,8 @@ describe('FIX-2 빠른 조종 응답', () => {
       previous = angle;
     }
     expect(riseTime).toBeDefined();
-    expect(riseTime!).toBeLessThanOrEqual(0.20);
+    expect(riseTime!).toBeGreaterThanOrEqual(0.4);
+    expect(riseTime!).toBeLessThanOrEqual(0.50);
     expect(peak).toBeLessThanOrEqual(37);
     input.keys.clear();
     let returnTime: number | undefined;
@@ -148,10 +149,12 @@ describe('FIX-2 빠른 조종 응답', () => {
     expect(previous).toBeLessThan(0.001);
     if (key === 'ArrowUp') console.info(`FIX-2 response: rise=${riseTime}s, return=${returnTime}s, peak=${peak}deg`);
   });
-  it.each(['KeyA', 'KeyD'])('%s 요 속도 160°/초', key => {
+  it.each(['KeyA', 'KeyD'])('%s 점진 입력 후 요 속도 160°/초', key => {
     const { state, input } = airborne(); input.keys.add(key);
+    run(.4, () => stepFlight(state, input, C.step));
+    const initialYaw = state.yaw;
     run(1, () => stepFlight(state, input, C.step));
-    expect(state.yaw * DEG).toBeCloseTo(key === 'KeyA' ? 160 : -160, 8);
+    expect((state.yaw - initialYaw) * DEG).toBeCloseTo(key === 'KeyA' ? 160 : -160, 8);
   });
   it('골대·출발점·카메라는 경기장 크기에 연동', () => {
     expect(C.goal.x).toBe(C.arena.halfLength - 1.5);
@@ -174,8 +177,8 @@ it('accepts authoritative remote axes without synthesizing keyboard input', () =
   ri.armed = li.armed = true; ri.throttle = li.throttle = .65;
   li.keys.add('ArrowUp'); li.keys.add('KeyD');
   for (let n = 0; n < 120; n++) {
-    stepFlight(remote, ri, C.step, C.arena, {pitch:-1,roll:0,yaw:-1});
     stepFlight(local, li, C.step);
+    stepFlight(remote, ri, C.step, C.arena, { ...li.stick });
   }
   expect(remote).toEqual(local);
   expect(ri.keys.size).toBe(0);

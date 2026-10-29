@@ -1,3 +1,4 @@
+import { createStick } from './sim/stick';
 import './style.css';
 import { axesFromKeys, type StickMode } from './sim/keymap';
 import { DEG, ARENA_PRESETS, type Arena } from './sim/constants';
@@ -109,7 +110,7 @@ function ensureScene() {
 const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyM', 'KeyN', 'KeyT', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
 function renderHud() {
   renderGuide();
-  const axes = axesFromKeys(input.keys, input.stickMode);
+  const axes = { ...axesFromKeys(input.keys, input.stickMode), ...input.stick };
   const throttleY = isEasy() ? -axes.throttle : 1 - input.throttle * 2;
   const leftY = input.stickMode === 2 ? throttleY : axes.pitch;
   const rightY = input.stickMode === 1 ? throttleY : axes.pitch;
@@ -157,6 +158,7 @@ function changeStickMode(mode: StickMode) {
   if (input.armed) { showToast('착륙·시동 끈 뒤 바꿔요'); return; }
   if (input.stickMode === mode) return;
   input.stickMode = mode;
+  input.stick = createStick();
   input.keys.clear(); input.throttleDirection = 0; input.throttleHeldSeconds = 0;
   try { localStorage.setItem(modeStorageKey, String(mode)); } catch { /* Session selection still works. */ }
   toastUntil = 0; refusalUntil = 0; lastGroundHint = -Infinity;
@@ -212,7 +214,7 @@ window.addEventListener('blur', safetyStop);
 document.addEventListener('visibilitychange', () => { if (document.hidden) safetyStop(); });
 const qa = Object.freeze({ state: () => ({
   throttleMode: input.throttleMode, vy: flight.vel.y, stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
-  net: netView.state(),
+  stick: { ...input.stick }, net: netView.state(),
   rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view?.mode ?? 1, arena: arenaSize(), tab,
 }) });
 Object.defineProperty(window, '__DRONE_QA', { value: qa, writable: false, configurable: false });

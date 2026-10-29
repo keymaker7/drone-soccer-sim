@@ -258,3 +258,27 @@ describe('NET-1 actual UI event wiring (offline)',()=>{
     el('leave').click(); expect(host.close).toHaveBeenCalledOnce(); expect(view.state().role).toBeNull();
   });
 });
+
+
+describe('FIX-7 학생 아날로그 스틱 전송', () => {
+  it.each([1,2] as const)('모드 %s의 점과 전송값이 같고, Shift와 복귀를 반영한다', async mode => {
+    await enterFlight(); el(`mode-${mode}`).click(); tick(16);
+    const pitchKey = mode === 2 ? 'ArrowUp' : 'KeyW';
+    key(pitchKey); key('ArrowRight'); key('KeyA'); tick(100);
+    const stick = view.state().stick;
+    expect(stick.pitch).toBeCloseTo(-.25);
+    expect(stick.roll).toBeCloseTo(.25);
+    expect(stick.yaw).toBeCloseTo(.33);
+    expect(current().sendInput.mock.calls.at(-1)?.[0].axes).toEqual(stick);
+    expect(el('left-dot').style.transform).toBe(`translate(${-stick.yaw*25}px,${(mode === 1 ? stick.pitch : 0)*25}px)`);
+    expect(el('right-dot').style.transform).toBe(`translate(${stick.roll*25}px,${(mode === 2 ? stick.pitch : 0)*25}px)`);
+    tick(320); expect(view.state().stick).toEqual({pitch:-1,roll:1,yaw:1});
+    key('ShiftRight'); tick(16);
+    expect(current().sendInput.mock.calls.at(-1)?.[0].axes).toEqual({pitch:-.5,roll:.5,yaw:.5});
+    key(pitchKey,'keyup'); key('ArrowRight','keyup'); key('KeyA','keyup'); tick(100);
+    expect(current().sendInput.mock.calls.at(-1)?.[0].axes).toEqual({pitch:0,roll:0,yaw:0});
+    key(pitchKey); tick(100); win.dispatchEvent(new Event('blur'));
+    expect(view.state().stick).toEqual({pitch:0,roll:0,yaw:0});
+    expect(el('step-4').textContent).toContain('짧게 톡 = 살짝, 꾹 = 끝까지 · Shift = 절반만');
+  });
+});

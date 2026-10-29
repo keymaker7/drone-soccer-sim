@@ -34,7 +34,7 @@ class Element extends EventTarget {
 }
 let steps: Element[];
 let elements: Map<string, Element>;
-let win: EventTarget & { innerWidth: number; location: {hash: string}; __DRONE_QA?: { state(): { throttleMode: 'easy' | 'manual'; vy: number; stickMode: 1 | 2; armed: boolean; throttle: number; pos: { x: number; y: number }; arena: {length:number;width:number;height:number}; tab:string } } };
+let win: EventTarget & { innerWidth: number; location: {hash: string}; __DRONE_QA?: { state(): { stick: {pitch:number;roll:number;yaw:number}; throttleMode: 'easy' | 'manual'; vy: number; stickMode: 1 | 2; armed: boolean; throttle: number; pos: { x: number; y: number }; arena: {length:number;width:number;height:number}; tab:string } } };
 let doc: EventTarget & { hidden: boolean; getElementById(id: string): Element };
 let frame: (time: number) => void;
 let now: number;
@@ -166,11 +166,11 @@ describe('FIX-4 모드 전환 및 실제 HUD 연결', () => {
     tick(1000);
     expect(win.__DRONE_QA!.state().throttle).toBe(throttle);
     expect(el('left-stick').style.transform).toBe(left);
-    key('ArrowUp'); key('ArrowRight'); tick(16);
+    key('ArrowUp'); key('ArrowRight'); tick(420);
     expect(el('right-stick').style.transform).toBe('translate(22px, -22px)');
-    key('ArrowUp', 'keyup'); key('ArrowRight', 'keyup'); tick(16);
+    key('ArrowUp', 'keyup'); key('ArrowRight', 'keyup'); tick(100);
     expect(el('right-stick').style.transform).toBe('translate(0px, 0px)');
-    key('KeyA'); tick(16);
+    key('KeyA'); tick(320);
     expect(el('left-stick').style.transform).toContain('translate(-22px,');
   });
   it('M 전환은 키 초기화·스로틀 유지·문구 갱신·저장, 키 반복 무시', () => {
@@ -352,5 +352,32 @@ describe('FIX-6 쉬운 스로틀 UI', () => {
     expect(el('right-stick').style.transform).toBe('translate(0px, 0px)');
     key('Space'); key('ShiftLeft'); key('ArrowUp'); tick(2000);
     expect(win.__DRONE_QA!.state().vy).toBeCloseTo(C.climbSpeed.fineUp, 1);
+  });
+});
+
+
+describe('FIX-7 실제 스틱 HUD와 QA', () => {
+  it('톡, 꾹, Shift, 복귀를 실제 스틱 좌표로 표시하고 QA는 복사본을 제공한다', () => {
+    key('ArrowUp'); key('ArrowRight'); key('KeyA'); tick(100);
+    const stick = win.__DRONE_QA!.state().stick;
+    expect(stick.pitch).toBeCloseTo(-.25);
+    expect(stick.roll).toBeCloseTo(.25);
+    expect(stick.yaw).toBeCloseTo(.33);
+    expect(el('right-stick').style.transform).toBe(`translate(${stick.roll*22}px, ${stick.pitch*22}px)`);
+    stick.pitch = 999;
+    expect(win.__DRONE_QA!.state().stick.pitch).toBeCloseTo(-.25);
+    tick(320); expect(win.__DRONE_QA!.state().stick).toEqual({pitch:-1,roll:1,yaw:1});
+    key('ShiftLeft'); tick(16);
+    expect(win.__DRONE_QA!.state().stick).toEqual({pitch:-.5,roll:.5,yaw:.5});
+    key('ArrowUp','keyup'); key('ArrowRight','keyup'); key('KeyA','keyup'); tick(100);
+    expect(win.__DRONE_QA!.state().stick).toEqual({pitch:0,roll:0,yaw:0});
+  });
+  it('안전 정지와 모드 전환은 남은 기울기를 즉시 초기화한다', () => {
+    key('ArrowUp'); tick(100); key('KeyM');
+    expect(win.__DRONE_QA!.state().stick).toEqual({pitch:0,roll:0,yaw:0});
+    key('KeyW'); tick(100);
+    expect(win.__DRONE_QA!.state().stick.pitch).toBeLessThan(0);
+    win.dispatchEvent(new Event('blur'));
+    expect(win.__DRONE_QA!.state().stick).toEqual({pitch:0,roll:0,yaw:0});
   });
 });
