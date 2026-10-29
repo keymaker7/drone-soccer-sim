@@ -316,14 +316,14 @@ describe('FIX-6 쉬운 스로틀 UI', () => {
   });
   it('W로 상승 후 놓으면 스틱 중앙·2초 내 하강, 착지 후 정지', () => {
     key('Space'); key('KeyW'); tick(2000);
-    expect(Math.abs(win.__DRONE_QA!.state().vy - 1.5)).toBeLessThanOrEqual(.15);
+    expect(Math.abs(win.__DRONE_QA!.state().vy - C.climbSpeed.up)).toBeLessThanOrEqual(.2);
     expect(el('left-stick').style.transform).toBe('translate(0px, -22px)');
     expect(el('throttle').textContent).toContain('추력 ');
     expect(el('vertical-speed').textContent).toContain('상승 +');
     key('KeyW', 'keyup'); tick(2000);
     expect(el('left-stick').style.transform).toBe('translate(0px, 0px)');
     expect(win.__DRONE_QA!.state().vy).toBeCloseTo(C.climbSpeed.idle, 1);
-    expect(el('vertical-speed').textContent).toContain('하강 −1.0');
+    expect(el('vertical-speed').textContent).toContain('하강 −1.3');
     tick(10000);
     expect(win.__DRONE_QA!.state()).toMatchObject({armed:true, throttle:0, vy:0, pos:{y:C.radius}});
   });
@@ -351,6 +351,6 @@ describe('FIX-6 쉬운 스로틀 UI', () => {
     key('ArrowUp','keyup'); tick(16);
     expect(el('right-stick').style.transform).toBe('translate(0px, 0px)');
     key('Space'); key('ShiftLeft'); key('ArrowUp'); tick(2000);
-    expect(win.__DRONE_QA!.state().vy).toBeCloseTo(.5, 1);
+    expect(win.__DRONE_QA!.state().vy).toBeCloseTo(C.climbSpeed.fineUp, 1);
   });
 });

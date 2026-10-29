@@ -6,7 +6,7 @@ import { changeThrottleMode, createInput, loadThrottleMode, loseFocus, readInput
 const arena = { halfLength: 100, halfWidth: 100, height: 100 };
 afterEach(() => vi.unstubAllGlobals());
 describe('FIX-6 easy climb control', () => {
-  it.each([[0, false, C.climbSpeed.idle, 0.15], [1, false, 1.5, 0.15], [-1, false, -1.8, 0.2], [1, true, 0.5, 0.1]] as const)('climb %s fine %s converges in two seconds', (climb, fine, target, tolerance) => {
+  it.each([[0, false, C.climbSpeed.idle, 0.15], [1, false, C.climbSpeed.up, 0.2], [-1, false, C.climbSpeed.down, 0.25], [1, true, C.climbSpeed.fineUp, 0.1]] as const)('climb %s fine %s converges in two seconds', (climb, fine, target, tolerance) => {
     const flight = createFlight(), input = createInput(); flight.pos = { x: 0, y: 10, z: 0 }; input.armed = true; input.climb = climb; input.fine = fine;
     for (let n = 0; n < 240; n++) stepFlight(flight, input, C.step, arena, { pitch: 0, roll: 0, yaw: 0 });
     expect(Math.abs(flight.vel.y - target)).toBeLessThanOrEqual(tolerance);
