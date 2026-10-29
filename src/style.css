@@ -73,3 +73,16 @@ kbd { font: inherit; font-weight: 750; color: inherit; }
   .guide-steps li { padding: 6px; }
 }
 @media (prefers-reduced-motion: reduce) { .shake { animation: none; outline: 2px solid #ff9d9d; } }
+
+.mode-toggle { display: flex; gap: 4px; padding: 4px; margin: 14px 0 7px; background: #071321; border: 1px solid #35506b; border-radius: 9px; }
+.mode-toggle button { flex: 1; padding: 8px; border: 1px solid transparent; border-radius: 6px; background: transparent; color: #9fb5cb; font: inherit; font-weight: 700; cursor: pointer; }
+.mode-toggle button[aria-pressed='true'] { background: #21425a; border-color: #8ddfff; color: #e8faff; }
+.mode-toggle button:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+.mode-hint { color: #9fb5cb; font-size: 10px; }
+.controller { display: flex; gap: 8px; justify-content: space-around; padding-bottom: 14px; margin-bottom: 14px; border-bottom: 1px solid #35506b; }
+.stick { display: flex; flex-direction: column; align-items: center; gap: 7px; font-size: 10px; color: #b7ccdf; }
+.stick-keys { color: #8ddfff; letter-spacing: .12em; font-size: 10px; }
+.stick-well { position: relative; width: 76px; height: 76px; border-radius: 50%; border: 1px solid #526c83; background: linear-gradient(transparent calc(50% - .5px), #35506b 50%, transparent calc(50% + .5px)), linear-gradient(90deg, transparent calc(50% - .5px), #35506b 50%, transparent calc(50% + .5px)), #071321; }
+.stick-dot { position: absolute; top: calc(50% - 6px); left: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: #a8e8ff; box-shadow: 0 0 0 3px #a8e8ff22; }
+#help { max-height: calc(100dvh - 48px); overflow-y: auto; }
+@media (max-height: 600px) { .controller { padding-bottom: 8px; margin-bottom: 8px; } }

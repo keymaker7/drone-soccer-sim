@@ -3,7 +3,7 @@ import { C, MAX_THRUST } from './constants';
 import { createInput, loseFocus, readInput, releaseKey, toggleArm } from './input';
 import { acceleration, createFlight, stepFlight } from './flight';
 
-function hold(start: number, seconds: number, direction = 'ArrowUp', shift?: string, step: number = C.step) {
+function hold(start: number, seconds: number, direction = 'KeyW', shift?: string, step: number = C.step) {
   const input = createInput(); input.throttle = start;
   input.keys.add(direction); if (shift) input.keys.add(shift);
   for (let t = 0; t < seconds - 1e-12; t += step) readInput(input, Math.min(step, seconds - t));
@@ -12,7 +12,7 @@ function hold(start: number, seconds: number, direction = 'ArrowUp', shift?: str
 
 describe('FIX-3 구간별 스로틀', () => {
   it('0 → 55%는 1.5초 이하', () => {
-    const input = createInput(); input.keys.add('ArrowUp');
+    const input = createInput(); input.keys.add('KeyW');
     let elapsed = 0;
     while (input.throttle < 0.55 && elapsed < 2) { readInput(input, C.step); elapsed += C.step; }
     expect(elapsed).toBeLessThanOrEqual(1.5);
@@ -26,13 +26,13 @@ describe('FIX-3 구간별 스로틀', () => {
     expect(long).toBeLessThanOrEqual(0.20); expect(long).toBeCloseTo(0.1873333333, 9);
     console.info(`FIX-3 increase: tap=${tap * 100}pp, hold=${long * 100}pp`);
   });
-  it('60%에서 ↓ 0.5초 뒤 50% 이상 유지', () => {
-    expect(hold(0.6, 0.5, 'ArrowDown').throttle).toBeCloseTo(0.5208, 10);
-    expect(hold(0.6, 0.5, 'ArrowDown').throttle).toBeGreaterThanOrEqual(0.5);
+  it('60%에서 S 0.5초 뒤 50% 이상 유지', () => {
+    expect(hold(0.6, 0.5, 'KeyS').throttle).toBeCloseTo(0.5208, 10);
+    expect(hold(0.6, 0.5, 'KeyS').throttle).toBeGreaterThanOrEqual(0.5);
   });
-  it.each(['ShiftLeft', 'ShiftRight'])('%s + ↑ 1초는 7.5%p ± 1, 모든 구간에 동일', shift => {
+  it.each(['ShiftLeft', 'ShiftRight'])('%s + W 1초는 7.5%p ± 1, 모든 구간에 동일', shift => {
     for (const start of [0.1, 0.39, 0.55, 0.69, 0.8]) {
-      const delta = hold(start, 1, 'ArrowUp', shift).throttle - start;
+      const delta = hold(start, 1, 'KeyW', shift).throttle - start;
       expect(delta).toBeGreaterThanOrEqual(0.065); expect(delta).toBeLessThanOrEqual(0.085);
       expect(delta).toBeCloseTo(0.0752, 10);
     }
@@ -40,7 +40,7 @@ describe('FIX-3 구간별 스로틀', () => {
   it.each([0.4, 0.7])('%s 경계에서 양방향 단조·연속, 큰 스텝과 작은 스텝의 결과 일치', boundary => {
     for (const direction of [-1, 1]) {
       const start = boundary - direction * 0.01;
-      const key = direction > 0 ? 'ArrowUp' : 'ArrowDown';
+      const key = direction > 0 ? 'KeyW' : 'KeyS';
       const input = createInput(); input.throttle = start; input.keys.add(key);
       let previous = start;
       for (let i = 0; i < 60; i++) {
@@ -55,20 +55,20 @@ describe('FIX-3 구간별 스로틀', () => {
     }
   });
   it('정확한 경계 출발, 여러 경계 및 0.12초를 한 스텝으로 넘어도 동일', () => {
-    for (const start of [0, 0.4, 0.7, 1]) for (const key of ['ArrowUp', 'ArrowDown']) {
+    for (const start of [0, 0.4, 0.7, 1]) for (const key of ['KeyW', 'KeyS']) {
       expect(hold(start, 2, key, undefined, 2).throttle).toBeCloseTo(hold(start, 2, key).throttle, 10);
     }
   });
   it('해제·재누름, 방향 반전, 동시 누름 뒤 재시작에도 첫 0.12초 감속', () => {
     const input = hold(0.55, 0.3);
-    releaseKey(input, 'ArrowUp'); input.keys.add('ArrowUp');
+    releaseKey(input, 'KeyW'); input.keys.add('KeyW');
     let before = input.throttle; readInput(input, 0.1);
     expect(input.throttle - before).toBeCloseTo(0.009, 10);
-    input.keys = new Set(['ArrowDown']); before = input.throttle; readInput(input, 0.1);
+    input.keys = new Set(['KeyS']); before = input.throttle; readInput(input, 0.1);
     expect(before - input.throttle).toBeCloseTo(0.009, 10);
-    input.keys.add('ArrowUp'); before = input.throttle; readInput(input, 1);
+    input.keys.add('KeyW'); before = input.throttle; readInput(input, 1);
     expect(input.throttle).toBe(before);
-    input.keys.delete('ArrowDown'); readInput(input, 0.1);
+    input.keys.delete('KeyS'); readInput(input, 0.1);
     expect(input.throttle - before).toBeCloseTo(0.009, 10);
   });
 });

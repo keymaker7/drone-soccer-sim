@@ -4,14 +4,22 @@
 <body>
   <main id="app">
     <header><span class="eyebrow">DRONE SOCCER / STAGE 01</span><h1>LOS 비행 연습</h1><p id="arena-subtitle"></p></header>
-    <details id="help" open><summary>조작 키 안내</summary><dl>
-      <dt>↑ / ↓</dt><dd>스로틀 올림 / 내림 · 놓으면 유지<br>55% 근처에선 천천히 움직여요<br>짧게 누르면 미세 조정 · Shift는 더 천천히</dd>
-      <dt>W / S</dt><dd>전진 / 후진 기울기</dd><dt>A / D</dt><dd>왼쪽 / 오른쪽 기울기</dd>
-      <dt>Q / E</dt><dd>좌 / 우 회전</dd><dt>Space</dt><dd>ARM / DISARM · 스로틀 5% 이하</dd>
+    <details id="help" open><summary>조작 키 안내</summary>
+      <div class="mode-toggle" role="group" aria-label="조종기 스틱 모드">
+        <button id="mode-2" type="button" aria-pressed="true">모드 2</button>
+        <button id="mode-1" type="button" aria-pressed="false">모드 1</button>
+      </div><span class="mode-hint">M 키로 전환 · 시동을 끈 상태에서</span><dl>
+      <dt id="throttle-keys">W / S</dt><dd>스로틀 올림 / 내림 · 놓으면 유지<br>55% 근처에선 천천히 움직여요<br>짧게 누르면 미세 조정 · Shift는 더 천천히</dd>
+      <dt id="pitch-keys">↑ / ↓</dt><dd>전진 / 후진 기울기</dd><dt>← / →</dt><dd>왼쪽 / 오른쪽 기울기</dd>
+      <dt>A / D</dt><dd>좌 / 우 회전</dd><dt>Space</dt><dd>ARM / DISARM · 스로틀 5% 이하</dd>
       <dt>Backspace</dt><dd>출발점으로 초기화</dd><dt>1 / 2 / 3 / 5</dt><dd>조종자 / 추적 / 전체 / 심판</dd>
       <dt>우클릭 드래그</dt><dd>시선 오프셋</dd><dt>마우스 휠</dt><dd>시야각 30–90°</dd>
-    </dl><p>ARM 후 ↑로 약 55%까지 올리면 떠오릅니다.<br>창을 벗어나면 즉시 모터가 꺼집니다.</p></details>
+    </dl><p><span id="takeoff-help">ARM 후 W로 약 55%까지 올리면 떠오릅니다.</span><br>창을 벗어나면 즉시 모터가 꺼집니다.</p></details>
     <section id="telemetry" aria-label="조종 정보">
+      <div class="controller" aria-label="현재 조종기 스틱 입력">
+        <div class="stick"><span class="stick-keys">W A S D</span><div class="stick-well"><i id="left-stick" class="stick-dot"></i></div><span id="left-stick-label">왼쪽 스틱 · 스로틀/요</span></div>
+        <div class="stick"><span class="stick-keys">↑ ← ↓ →</span><div class="stick-well"><i id="right-stick" class="stick-dot"></i></div><span id="right-stick-label">오른쪽 스틱 · 피치/롤</span></div>
+      </div>
       <div class="status-row"><strong id="arm">DISARM</strong><span>ANGLE · 최대 35°</span></div>
       <p id="notice" role="status">스로틀 5% 이하에서 Space로 ARM</p>
       <div class="throttle-label"><span>스로틀</span><b id="throttle">0%</b></div><meter id="throttle-meter" min="0" max="100" value="0" aria-label="스로틀"></meter>
@@ -21,10 +29,10 @@
       <div class="guide-heading"><span class="eyebrow">FIRST FLIGHT</span><span id="guide-progress">02 / 04</span></div>
       <h2 id="guide-title">차근차근, 첫 비행</h2>
       <ol class="guide-steps">
-        <li data-step="1"><span class="step-number">①</span><span><kbd>↓</kbd> 스로틀 0%</span></li>
+        <li data-step="1"><span class="step-number">①</span><span><kbd id="guide-down">S</kbd> 스로틀 0%</span></li>
         <li data-step="2"><span class="step-number">②</span><span><kbd>Space</kbd> 시동</span></li>
-        <li data-step="3"><span class="step-number">③</span><span><kbd>↑</kbd> 꾹 <small>55% 넘으면 떠요</small><small>55% 근처에선 천천히 움직여요</small></span></li>
-        <li data-step="4"><span class="step-number">④</span><span><kbd>W/A/S/D</kbd>로 기울이기</span></li>
+        <li data-step="3"><span class="step-number">③</span><span><kbd id="guide-up">W</kbd> 꾹 <small>55% 넘으면 떠요</small><small>55% 근처에선 천천히 움직여요</small></span></li>
+        <li data-step="4"><span class="step-number">④</span><span><kbd id="guide-tilt">방향키</kbd>로 기울이기</span></li>
       </ol>
       <p id="guide-status" role="status">Space를 눌러 시동을 걸어요</p>
     </section>

@@ -1,9 +1,10 @@
 import { C } from './constants';
+import { axesFromKeys, type StickMode } from './keymap';
 export interface InputState {
-  armed: boolean; throttle: number; motorThrottle: number; keys: Set<string>;
+  stickMode: StickMode; armed: boolean; throttle: number; motorThrottle: number; keys: Set<string>;
   throttleDirection: number; throttleHeldSeconds: number;
 }
-export const createInput = (): InputState => ({ armed: false, throttle: 0, motorThrottle: 0, keys: new Set(), throttleDirection: 0, throttleHeldSeconds: 0 });
+export const createInput = (): InputState => ({ stickMode: 2, armed: false, throttle: 0, motorThrottle: 0, keys: new Set(), throttleDirection: 0, throttleHeldSeconds: 0 });
 export function toggleArm(input: InputState): boolean {
   if (input.armed) { input.armed = false; input.motorThrottle = 0; return true; }
   if (input.throttle > C.armThreshold) return false;
@@ -16,8 +17,7 @@ export function loseFocus(input: InputState): void {
   input.throttleDirection = 0; input.throttleHeldSeconds = 0;
 }
 export function readInput(input: InputState, dt: number) {
-  const axis = (positive: string, negative: string) => Number(input.keys.has(positive)) - Number(input.keys.has(negative));
-  const direction = axis('ArrowUp', 'ArrowDown');
+  const { throttle: direction, pitch, roll, yaw } = axesFromKeys(input.keys, input.stickMode);
   if (direction !== input.throttleDirection || direction === 0) input.throttleHeldSeconds = 0;
   input.throttleDirection = direction;
   if (direction !== 0) {
@@ -43,12 +43,12 @@ export function readInput(input: InputState, dt: number) {
     }
     input.throttleHeldSeconds += dt;
   }
-  return { pitch: axis('KeyS', 'KeyW'), roll: axis('KeyD', 'KeyA'), yaw: axis('KeyQ', 'KeyE') };
+  return { pitch, roll, yaw };
 }
 
 export function releaseKey(input: InputState, code: string): void {
   input.keys.delete(code);
-  if (code === 'ArrowUp' || code === 'ArrowDown') {
+  if ((input.stickMode === 2 ? ['KeyW', 'KeyS'] : ['ArrowUp', 'ArrowDown']).includes(code)) {
     input.throttleDirection = 0; input.throttleHeldSeconds = 0;
   }
 }
