@@ -1,0 +1,21 @@
+<!doctype html>
+<html lang="ko">
+<head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>드론축구 · LOS 비행 연습</title></head>
+<body>
+  <main id="app">
+    <header><span class="eyebrow">DRONE SOCCER / STAGE 01</span><h1>LOS 비행 연습</h1><p>파랑 팀 · 스트라이커 1대 · 수동 스로틀</p></header>
+    <details id="help" open><summary>조작 키 안내</summary><dl>
+      <dt>↑ / ↓</dt><dd>스로틀 올림 / 내림 · 놓으면 유지</dd>
+      <dt>W / S</dt><dd>전진 / 후진 기울기</dd><dt>A / D</dt><dd>왼쪽 / 오른쪽 기울기</dd>
+      <dt>Q / E</dt><dd>좌 / 우 회전</dd><dt>Space</dt><dd>ARM / DISARM · 스로틀 5% 이하</dd>
+      <dt>Backspace</dt><dd>출발점으로 초기화</dd><dt>1 / 2 / 3 / 5</dt><dd>조종자 / 추적 / 전체 / 심판</dd>
+      <dt>우클릭 드래그</dt><dd>시선 오프셋</dd><dt>마우스 휠</dt><dd>시야각 30–90°</dd>
+    </dl><p>ARM 후 ↑로 약 55%까지 올리면 떠오릅니다.<br>창을 벗어나면 즉시 모터가 꺼집니다.</p></details>
+    <section id="telemetry" aria-label="조종 정보">
+      <div class="status-row"><strong id="arm">DISARM</strong><span>ANGLE · 최대 35°</span></div>
+      <p id="notice" role="status">스로틀 5% 이하에서 Space로 ARM</p>
+      <div class="throttle-label"><span>스로틀</span><b id="throttle">0%</b></div><meter id="throttle-meter" min="0" max="100" value="0" aria-label="스로틀"></meter>
+      <dl class="readings"><div><dt>롤 / 피치</dt><dd id="tilt">0° / 0°</dd></div><div><dt>속도</dt><dd id="speed">0.00 m/s</dd></div><div><dt>고도 · 중심</dt><dd id="altitude">0.20 m</dd></div><div><dt>카메라</dt><dd id="camera">1 · LOS 조종자</dd></div></dl>
+    </section><div id="scene-error" role="alert" hidden></div>
+  </main><script type="module" src="/src/main.ts"></script>
+</body></html>

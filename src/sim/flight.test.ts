@@ -1,0 +1,112 @@
+import { describe, expect, it } from 'vitest';
+import { C, DEG } from './constants';
+import { acceleration, createFlight, stepFlight } from './flight';
+import { createInput, loseFocus, readInput, toggleArm } from './input';
+import { createFixedClock } from './clock';
+
+function airborne(throttle: number = C.hoverThrottle, armed = true) {
+  const state = createFlight(); state.pos = { x: 0, y: 2, z: 0 };
+  const input = createInput(); input.armed = armed; input.throttle = throttle;
+  return { state, input };
+}
+function run(seconds: number, fn: () => void) { for (let n = 0; n < Math.round(seconds / C.step); n++) fn(); }
+
+describe('비행 모델', () => {
+  it('55% 호버에서 수직 가속도 절댓값 0.3 m/s² 미만', () => {
+    const { state, input } = airborne();
+    expect(Math.abs(acceleration(state, input).y)).toBeLessThan(0.3);
+    run(1, () => stepFlight(state, input, C.step)); expect(state.pos.y).toBeCloseTo(2, 8);
+  });
+  it('100% 상승, 0% 및 DISARM에서 낙하', () => {
+    for (const [throttle, armed, direction] of [[1, true, 1], [0, true, -1], [1, false, -1]] as const) {
+      const { state, input } = airborne(throttle, armed);
+      run(0.2, () => stepFlight(state, input, C.step));
+      expect((state.pos.y - 2) * direction).toBeGreaterThan(0);
+      expect(state.vel.y * direction).toBeGreaterThan(0);
+    }
+  });
+  it('최대 피치 35° 이하, 스틱 해제 후 2초 이내 3° 이내 복원', () => {
+    const { state, input } = airborne(); input.keys.add('KeyW');
+    run(3, () => { stepFlight(state, input, C.step); expect(Math.abs(state.pitch) * DEG).toBeLessThanOrEqual(35 + 1e-8); });
+    expect(Math.abs(state.pitch) * DEG).toBeGreaterThan(34);
+    input.keys.clear(); run(2, () => stepFlight(state, input, C.step));
+    expect(Math.abs(state.pitch) * DEG).toBeLessThan(3);
+  });
+  it('W는 전진 +x, D는 오른쪽 +z, Q는 왼쪽 요 회전', () => {
+    for (const [key, axis] of [['KeyW', 'x'], ['KeyD', 'z']] as const) {
+      const { state, input } = airborne(); input.keys.add(key);
+      run(0.5, () => stepFlight(state, input, C.step)); expect(state.vel[axis]).toBeGreaterThan(0);
+    }
+    const { state, input } = airborne(); input.keys.add('KeyQ');
+    stepFlight(state, input, C.step); expect(state.yaw).toBeGreaterThan(0);
+  });
+  it('대각선 입력과 방향 전환에서도 전체 기울기 35° 이하', () => {
+    const { state, input } = airborne();
+    for (const keys of [['KeyW'], ['KeyW', 'KeyD'], ['KeyS', 'KeyA'], ['KeyD']]) {
+      input.keys = new Set(keys);
+      run(2, () => {
+        stepFlight(state, input, C.step);
+        expect(Math.acos(Math.cos(state.pitch) * Math.cos(state.roll)) * DEG).toBeLessThanOrEqual(35 + 1e-8);
+      });
+    }
+  });
+  it('6개 경계 고속 충돌 후 반지름을 포함해 경기장 안에 유지', () => {
+    const bounds = { x: [-7.8, 7.8], y: [0.2, 4.3], z: [-3.3, 3.3] };
+    for (const axis of ['x', 'y', 'z'] as const) for (const sign of [-1, 1]) {
+      const { state, input } = airborne(0, false); state.vel[axis] = sign * 10000;
+      stepFlight(state, input, C.step);
+      expect(state.vel[axis] * sign).toBeLessThan(0);
+      run(2, () => {
+        stepFlight(state, input, C.step);
+        for (const a of ['x', 'y', 'z'] as const) {
+          expect(state.pos[a]).toBeGreaterThanOrEqual(bounds[a][0]); expect(state.pos[a]).toBeLessThanOrEqual(bounds[a][1]);
+        }
+      });
+    }
+  });
+});
+describe('입력 및 ARM 안전 규칙', () => {
+  it('첫 로드 상태는 DISARM, 스로틀 0이고 이륙하지 않음', () => {
+    const input = createInput(), state = createFlight();
+    expect(input.armed).toBe(false); expect(input.throttle).toBe(0);
+    run(5, () => stepFlight(state, input, C.step)); expect(state.pos).toEqual(C.start);
+  });
+  it('5% 초과 ARM 거부, 5% 이하 ARM 허용, DISARM은 항상 허용', () => {
+    for (const value of [0, 0.05, 0.050001, 1]) {
+      const input = createInput(); input.throttle = value;
+      expect(toggleArm(input)).toBe(value <= C.armThreshold); expect(input.armed).toBe(value <= C.armThreshold);
+    }
+    const input = createInput(); input.armed = true; input.throttle = 1;
+    expect(toggleArm(input)).toBe(true); expect(input.armed).toBe(false);
+  });
+  it('blur/hidden 공용 안전 처리 → 즉시 DISARM + 스로틀 0 + 눌린 키 해제', () => {
+    const input = createInput(); input.armed = true; input.throttle = 0.8; input.keys.add('ArrowUp'); input.keys.add('KeyW');
+    loseFocus(input); expect(input.armed).toBe(false); expect(input.throttle).toBe(0); expect(input.keys.size).toBe(0);
+    readInput(input, 1); expect(input.throttle).toBe(0);
+  });
+  it('스로틀은 누르는 동안 증감, 해제 시 유지, 0~100% 제한', () => {
+    const input = createInput(); input.keys.add('ArrowUp'); readInput(input, 1); expect(input.throttle).toBeCloseTo(C.throttleRate);
+    input.keys.clear(); readInput(input, 2); expect(input.throttle).toBeCloseTo(C.throttleRate);
+    input.keys.add('ArrowUp'); readInput(input, 10); expect(input.throttle).toBe(1);
+    input.keys = new Set(['ArrowDown']); readInput(input, 10); expect(input.throttle).toBe(0);
+  });
+});
+describe('120 Hz accumulator', () => {
+  it('16 ms와 50 ms 화면 간격에서 1초 후 위치 차이 1 cm 미만, 정확히 120회 실행', () => {
+    function simulate(frame: number) {
+      const { state, input } = airborne(0.6); input.keys.add('KeyW'); input.keys.add('ArrowUp');
+      let steps = 0;
+      const clock = createFixedClock(dt => { expect(dt).toBe(C.step); steps++; stepFlight(state, input, dt); });
+      let elapsed = 0;
+      while (elapsed < 1 - 1e-10) { const dt = Math.min(frame, 1 - elapsed); clock.advance(dt); elapsed += dt; }
+      expect(steps).toBe(120); return state;
+    }
+    const a = simulate(0.016), b = simulate(0.050);
+    expect(Math.hypot(a.pos.x - b.pos.x, a.pos.y - b.pos.y, a.pos.z - b.pos.z)).toBeLessThan(0.01);
+  });
+  it('긴 프레임은 0.25초로 제한하며 reset은 남은 누적 시간을 지움', () => {
+    let count = 0; const clock = createFixedClock(() => count++);
+    clock.advance(10); expect(count).toBe(30);
+    clock.advance(C.step / 2); clock.reset(); clock.advance(C.step / 2); expect(count).toBe(30);
+  });
+});
