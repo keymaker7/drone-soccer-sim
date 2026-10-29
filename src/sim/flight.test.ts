@@ -167,3 +167,16 @@ describe('FIX-2 빠른 조종 응답', () => {
     expect(C.camera.referee.z).toBeGreaterThan(C.arena.halfWidth);
   });
 });
+
+it('accepts authoritative remote axes without synthesizing keyboard input', () => {
+  const remote = createFlight(); const local = createFlight();
+  const ri = createInput(); const li = createInput();
+  ri.armed = li.armed = true; ri.throttle = li.throttle = .65;
+  li.keys.add('ArrowUp'); li.keys.add('KeyD');
+  for (let n = 0; n < 120; n++) {
+    stepFlight(remote, ri, C.step, C.arena, {pitch:-1,roll:0,yaw:-1});
+    stepFlight(local, li, C.step);
+  }
+  expect(remote).toEqual(local);
+  expect(ri.keys.size).toBe(0);
+});

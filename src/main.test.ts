@@ -1,6 +1,8 @@
 import { C } from './sim/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
+const netSpies = vi.hoisted(() => ({ setActive: vi.fn(), state: vi.fn(() => ({ role: null, room: '', peers: 0, drones: [], myId: null })) }));
+vi.mock('./net/view', () => ({ mountNet: () => netSpies }));
 vi.mock('./score/view', () => ({ mountScore: () => ({ setActive: vi.fn() }) }));
 vi.mock('./tactics/view', () => ({ mountTactics: () => ({ setActive: vi.fn(), refresh: vi.fn() }) }));
 const sceneSpies = vi.hoisted(() => ({ draw: vi.fn(), setArena: vi.fn(), resize: vi.fn() }));
@@ -277,5 +279,23 @@ describe('FIX-5 탭 안전과 맵 통합', () => {
     expect(win.__DRONE_QA!.state().arena.length).toBe(16);
     const snapshot = win.__DRONE_QA!.state(); snapshot.arena.length = 1000;
     expect(win.__DRONE_QA!.state().arena.length).toBe(16);
+  });
+});
+
+
+describe('NET-1 탭 연결', () => {
+  it.each(['#net', '#join=ABCD'])('직접 진입 %s는 함께 경기로 라우팅', async hash => {
+    await boot(1440, false, true, {getItem:vi.fn(() => null),setItem:vi.fn()},hash);
+    expect(win.__DRONE_QA!.state().tab).toBe('net');
+    expect(el('net-panel').hidden).toBe(false);
+    expect(netSpies.setActive).toHaveBeenLastCalledWith(true);
+    key('Space');
+    expect(win.__DRONE_QA!.state().armed).toBe(false);
+  });
+  it('연습 중 함께 경기 클릭 시 즉시 DISARM하고 네트워크 탭 이탈도 알림', () => {
+    key('Space'); el('tab-net').dispatchEvent(new Event('click'));
+    expect(win.__DRONE_QA!.state()).toMatchObject({tab:'net',armed:false,throttle:0,net:{role:null}});
+    el('tab-score').dispatchEvent(new Event('click'));
+    expect(netSpies.setActive).toHaveBeenLastCalledWith(false);
   });
 });

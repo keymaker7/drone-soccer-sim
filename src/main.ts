@@ -9,9 +9,10 @@ import { CAMERA_NAMES, createScene, type CameraMode } from './render/scene';
 
 import { mountScore } from './score/view';
 import { mountTactics } from './tactics/view';
+import { mountNet } from './net/view';
 
-type Tab = 'fly' | 'score' | 'tactics';
-const tabFromHash = (): Tab => window.location.hash === '#score' ? 'score' : window.location.hash === '#tactics' ? 'tactics' : 'fly';
+type Tab = 'fly' | 'net' | 'score' | 'tactics';
+const tabFromHash = (): Tab => window.location.hash === '#net' || window.location.hash.startsWith('#join=') ? 'net' : window.location.hash === '#score' ? 'score' : window.location.hash === '#tactics' ? 'tactics' : 'fly';
 let tab: Tab = tabFromHash();
 type MapId = keyof typeof ARENA_PRESETS;
 const mapIds: MapId[] = ['official', 'practice', 'large'];
@@ -183,9 +184,11 @@ window.addEventListener('blur', safetyStop);
 document.addEventListener('visibilitychange', () => { if (document.hidden) safetyStop(); });
 const qa = Object.freeze({ state: () => ({
   stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
+  net: netView.state(),
   rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view?.mode ?? 1, arena: arenaSize(), tab,
 }) });
 Object.defineProperty(window, '__DRONE_QA', { value: qa, writable: false, configurable: false });
+const netView = mountNet(element('net-root'));
 const scoreView = mountScore(element('score-root'));
 const tacticsView = mountTactics(element('tactics-root'), arenaSize);
 function renderMap() {
@@ -229,9 +232,11 @@ function selectTab(next: Tab) {
   if (tab === 'fly' && next !== 'fly') safetyStop();
   stopFrames(); tab = next;
   element('app').hidden = next !== 'fly';
+  element('net-panel').hidden = next !== 'net';
+  netView.setActive(next === 'net');
   element('score-panel').hidden = next !== 'score';
   element('tactics-panel').hidden = next !== 'tactics';
-  for (const name of ['fly', 'score', 'tactics'] as const) {
+  for (const name of ['fly', 'net', 'score', 'tactics'] as const) {
     if (next === name) element(`tab-${name}`).setAttribute('aria-current', 'page');
     else element(`tab-${name}`).removeAttribute('aria-current');
   }
@@ -243,7 +248,7 @@ function selectTab(next: Tab) {
 }
 window.addEventListener('hashchange', () => selectTab(tabFromHash()));
 // Stop motors synchronously on navigation click, before the hashchange task runs.
-for (const name of ['fly', 'score', 'tactics'] as const) element(`tab-${name}`).addEventListener('click', () => selectTab(name));
+for (const name of ['fly', 'net', 'score', 'tactics'] as const) element(`tab-${name}`).addEventListener('click', () => selectTab(name));
 document.addEventListener('visibilitychange', () => { if (document.hidden) stopFrames(); else startFrames(); });
 window.addEventListener('storage', e => {
   if (e.key !== 'drone-soccer-arena' || !mapIds.includes(e.newValue as MapId) || input.armed) return;

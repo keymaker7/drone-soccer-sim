@@ -4,6 +4,7 @@
 <body>
   <nav class="workspace-tabs" aria-label="드론축구 작업 공간">
     <a id="tab-fly" href="#fly" aria-current="page">비행 연습</a>
+    <a id="tab-net" href="#net">함께 경기</a>
     <a id="tab-score" href="#score">스코어판</a>
     <a id="tab-tactics" href="#tactics">전술판</a>
   </nav>
@@ -57,6 +58,7 @@
     </dialog>
     <div id="scene-error" role="alert" hidden></div>
   </main>
+  <main id="net-panel" class="workspace-panel" aria-label="함께 경기" hidden><div id="net-root"></div></main>
   <main id="score-panel" class="workspace-panel" aria-label="스코어판" hidden>
     <div class="workspace-heading"><span class="eyebrow">DRONE SOCCER / MATCH CONTROL</span><a href="#score" target="_blank" rel="noopener">새 창으로 열기 ↗</a></div>
     <div id="score-root"></div>

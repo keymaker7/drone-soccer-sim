@@ -3,6 +3,9 @@ import { C, DEFAULT_ARENA, layoutFor, type Arena } from '../sim/constants';
 import { segmentIntersectsRing } from '../sim/occlusion';
 import { overviewPosition } from './overview';
 import type { FlightState } from '../sim/flight';
+export interface RemoteDrone { id: string; team: string; role: string; x: number; y: number; z: number; roll: number; pitch: number; yaw: number; armed: boolean }
+export interface RemotePilot { id: string; nick: string; team: string; role: string }
+export const ROLE_COLORS: Record<string, string> = { striker: '#ffd966', guide: '#8ef0bd', libero: '#d7b8ff', sweeper: '#ffae7a', keeper: '#ffffff' };
 export type CameraMode = 1 | 2 | 3 | 5;
 export const CAMERA_NAMES: Record<CameraMode, string> = { 1: '1 · LOS 조종자', 2: '2 · 추적 관찰', 3: '3 · 경기장 전체', 5: '5 · 심판 측면' };
 export function createScene(container: HTMLElement, arena: Arena = DEFAULT_ARENA) {
@@ -74,6 +77,34 @@ export function createScene(container: HTMLElement, arena: Arena = DEFAULT_ARENA
   }
   const marker = new THREE.Mesh(new THREE.SphereGeometry(C.render.markerRadius, 12, 8), new THREE.MeshBasicMaterial({ color: '#63ff96' }));
   marker.position.set(C.render.markerX, C.render.bodyHeight, 0); drone.add(marker);
+  const remote = new Map<string, { group: THREE.Group; label: THREE.Sprite; nick: string }>();
+  let remoteLos: { x: number; y: number; z: number } | null = null;
+  function releaseObjects(objects: THREE.Object3D[]) {
+    const geometries = new Set<THREE.BufferGeometry>();
+    const materials = new Set<THREE.Material>();
+    for (const object of objects) object.traverse(child => {
+      if (child instanceof THREE.Mesh || child instanceof THREE.LineSegments || child instanceof THREE.Sprite) {
+        if ('geometry' in child) geometries.add(child.geometry);
+        for (const material of Array.isArray(child.material) ? child.material : [child.material]) materials.add(material);
+      }
+    });
+    for (const geometry of geometries) geometry.dispose();
+    for (const material of materials) {
+      if ('map' in material && material.map instanceof THREE.Texture) material.map.dispose();
+      material.dispose();
+    }
+  }
+  function nameTag(nick: string) {
+    const canvas = document.createElement('canvas'); canvas.width = 256; canvas.height = 64;
+    const ctx = canvas.getContext('2d')!;
+    ctx.fillStyle = '#071321dd'; ctx.fillRect(0, 0, 256, 64);
+    ctx.fillStyle = '#ffffff'; ctx.font = 'bold 28px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText(nick, 128, 32, 240);
+    const texture = new THREE.CanvasTexture(canvas);
+    const label = new THREE.Sprite(new THREE.SpriteMaterial({ map: texture, depthTest: false, transparent: true }));
+    label.scale.set(1.05, .2625, 1); label.position.y = .45;
+    return label;
+  }
   let mode: CameraMode = 1;
   let offsetX = 0, offsetY = 0;
   const target = new THREE.Vector3();
@@ -89,7 +120,8 @@ export function createScene(container: HTMLElement, arena: Arena = DEFAULT_ARENA
     offsetY = THREE.MathUtils.clamp(offsetY - e.movementY * C.camera.dragSensitivity, -C.camera.maxOffset, C.camera.maxOffset);
   });
   for (const event of ['pointerup', 'pointercancel', 'lostpointercapture']) renderer.domElement.addEventListener(event, () => { dragging = false; });
-  window.addEventListener('blur', () => { dragging = false; });
+  const stopDrag = () => { dragging = false; };
+  window.addEventListener('blur', stopDrag);
   renderer.domElement.addEventListener('wheel', e => {
     e.preventDefault();
     camera.fov = THREE.MathUtils.clamp(camera.fov + e.deltaY * C.camera.wheelSensitivity, C.camera.minFov, C.camera.maxFov); camera.updateProjectionMatrix();
@@ -101,7 +133,7 @@ export function createScene(container: HTMLElement, arena: Arena = DEFAULT_ARENA
     overview.copy(overviewPosition(camera.aspect, C.camera.fov, arena));
   }
   window.addEventListener('resize', resize); resize();
-  return {
+  const api = {
     resize,
     setArena(value: Arena) {
       const geometries = new Set<THREE.BufferGeometry>();
@@ -127,11 +159,52 @@ export function createScene(container: HTMLElement, arena: Arena = DEFAULT_ARENA
     },
     get mode() { return mode; },
     setMode(value: CameraMode) { mode = value; offsetX = 0; offsetY = 0; },
+    drawMany(drones: RemoteDrone[], roster: RemotePilot[], myId: string | null, elapsed = 0) {
+      drone.visible = false;
+      const ids = new Set(drones.map(d => d.id));
+      for (const [id, item] of remote) if (!ids.has(id)) { scene.remove(item.group); releaseObjects([item.group]); remote.delete(id); }
+      for (const d of drones) {
+        const nick = roster.find(p => p.id === d.id)?.nick ?? '';
+        let item = remote.get(d.id);
+        if (!item) {
+          const group = new THREE.Group();
+          const teamColor = d.team === 'blue' ? '#559eff' : '#ff6575';
+          group.add(new THREE.Mesh(new THREE.SphereGeometry(C.radius, 16, 10), new THREE.MeshBasicMaterial({ color: teamColor, wireframe: true })));
+          group.add(new THREE.Mesh(new THREE.CylinderGeometry(.08, .08, .045, 12), mat(teamColor)));
+          const roleRing = new THREE.Mesh(new THREE.TorusGeometry(.145, .018, 6, 24), new THREE.MeshBasicMaterial({color: ROLE_COLORS[d.role] ?? '#ffffff'}));
+          roleRing.rotation.x = Math.PI / 2; group.add(roleRing);
+          const nose = new THREE.Mesh(new THREE.SphereGeometry(.045, 8, 6), new THREE.MeshBasicMaterial({color:'#a5ff9e'})); nose.position.x = .15; group.add(nose);
+          const label = nameTag(nick); group.add(label); scene.add(group);
+          item = { group, label, nick }; remote.set(d.id, item);
+        }
+        if (item.nick !== nick) {
+          item.group.remove(item.label); releaseObjects([item.label]);
+          item.label = nameTag(nick); item.nick = nick; item.group.add(item.label);
+        }
+        item.group.position.set(d.x, d.y, d.z); item.group.rotation.set(d.roll, d.yaw, d.pitch, 'YZX');
+        // Keep name tags directly overhead rather than leaning with the cage.
+        item.label.position.copy(new THREE.Vector3(0, .45, 0).applyQuaternion(item.group.quaternion.clone().invert()));
+      }
+      const own = drones.find(d => d.id === myId);
+      remoteLos = null;
+      if (myId) {
+        const pilot = roster.find(p => p.id === myId);
+        const teammates = roster.filter(p => p.team === pilot?.team);
+        const index = Math.max(0, teammates.findIndex(p => p.id === myId));
+        remoteLos = { x: (pilot?.team === 'red' ? 1 : -1) * (arena.halfLength + 1.5), y: 1.7, z: index - (teammates.length - 1) / 2 };
+        mode = 1;
+      }
+      api.draw({ pos: own ? {x:own.x,y:own.y,z:own.z} : {x:0,y:arena.height/2,z:0}, vel:{x:0,y:0,z:0}, roll:own?.roll ?? 0, pitch:own?.pitch ?? 0, yaw:own?.yaw ?? 0, rollRate:0, pitchRate:0 }, elapsed);
+    },
+    dispose() {
+      window.removeEventListener('resize', resize); window.removeEventListener('blur', stopDrag);
+      releaseObjects(scene.children); remote.clear(); renderer.dispose(); renderer.domElement.remove();
+    },
     draw(s: FlightState, elapsed = 0) {
       drone.position.set(s.pos.x, s.pos.y, s.pos.z);
       drone.rotation.set(s.roll, s.yaw, s.pitch, 'YZX');
       target.copy(drone.position);
-      if (mode === 1) camera.position.set(layout.camera.los.x, layout.camera.los.y, layout.camera.los.z);
+      if (mode === 1) { const los = remoteLos ?? layout.camera.los; camera.position.set(los.x, los.y, los.z); }
       if (mode === 2) camera.position.set(s.pos.x - Math.cos(s.yaw) * C.camera.followDistance, s.pos.y + C.camera.followHeight, s.pos.z + Math.sin(s.yaw) * C.camera.followDistance);
       if (mode === 3) { camera.position.copy(overview); target.set(0, arena.height / 2, 0); }
       if (mode === 5) { camera.position.set(layout.camera.referee.x, layout.camera.referee.y, layout.camera.referee.z); target.set(0, arena.height / 2, 0); }
@@ -147,4 +220,5 @@ export function createScene(container: HTMLElement, arena: Arena = DEFAULT_ARENA
       renderer.render(scene, camera);
     },
   };
+  return api;
 }

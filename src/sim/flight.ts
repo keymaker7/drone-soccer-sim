@@ -33,8 +33,8 @@ export function collide(s: FlightState, arena: Arena = DEFAULT_ARENA): void {
     if (s.pos[axis] > hi) { s.pos[axis] = hi; if (s.vel[axis] > 0) s.vel[axis] *= -C.restitution; }
   }
 }
-export function stepFlight(s: FlightState, input: InputState, dt: number, arena: Arena = DEFAULT_ARENA): void {
-  const stick = readInput(input, dt);
+export function stepFlight(s: FlightState, input: InputState, dt: number, arena: Arena = DEFAULT_ARENA, axes?: { pitch: number; roll: number; yaw: number }): void {
+  const stick = axes ?? readInput(input, dt);
   // Exact first-order response; DISARM bypasses the lag and cuts thrust immediately.
   input.motorThrottle = input.armed
     ? input.motorThrottle + (input.throttle - input.motorThrottle) * -Math.expm1(-dt / C.motorTimeConstant)

@@ -1,0 +1,151 @@
+/* Flight-deck palette: deep navy, clear team colors and a restrained lime signal. */
+.net-workspace { --net-bg:#091522; --net-panel:#101f2f; --net-line:#304759; --net-muted:#a1b6c6; --net-accent:#d5f59a; color:#edf5f9; max-width:1700px; margin:0 auto; min-height:100%; font-size:14px; }
+.net-workspace button,.net-workspace input,.net-workspace select { font:inherit; }
+.net-workspace button { cursor:pointer; transition:background .15s,border-color .15s; }
+.net-workspace button:focus-visible,.net-workspace input:focus-visible,.net-workspace select:focus-visible,.net-workspace summary:focus-visible { outline:3px solid var(--net-accent); outline-offset:3px; }
+.net-workspace button:disabled,.net-workspace select:disabled { cursor:not-allowed; opacity:.48; }
+.net-heading { display:flex; align-items:center; justify-content:space-between; gap:16px; padding:3px 0 18px; border-bottom:1px solid var(--net-line); }
+.net-kicker { margin:0 0 9px; color:var(--net-muted); font-size:10px; font-weight:750; letter-spacing:.15em; line-height:1.6; }
+.net-heading h1 { margin:0; font-size:25px; letter-spacing:-.04em; }
+.net-heading h1 span { display:inline-block; margin-left:12px; border:1px solid #637545; color:var(--net-accent); padding:4px 7px; vertical-align:middle; font-size:10px; letter-spacing:0; }
+.net-tag { color:var(--net-muted); font-size:12px; }
+.net-quiet { border:1px solid var(--net-line); background:transparent; color:#d8e7ef; padding:10px 13px; border-radius:5px; }
+.net-quiet:hover { background:#20364a; border-color:#8ba7bb; }
+.net-welcome { max-width:1050px; margin:clamp(24px,6vh,70px) auto 40px; }
+.net-welcome h2 { margin:12px 0 22px; font-size:clamp(36px,5.2vw,68px); letter-spacing:-.06em; line-height:1.16; font-weight:750; }
+.net-welcome > p:not(.net-kicker) { line-height:1.8; color:var(--net-muted); }
+.net-entry-grid { display:grid; grid-template-columns:1fr 1fr; gap:18px; margin-top:32px; }
+.net-entry { display:flex; flex-direction:column; align-items:stretch; gap:26px; text-align:left; min-height:200px; padding:27px 30px; border:1px solid #526947; border-top:4px solid var(--net-accent); border-radius:5px; background:#172b2b; color:#f2f8ec; }
+.net-entry:nth-child(2) { border-color:#3b5c77; border-top-color:#8bc8ff; background:#14283c; }
+.net-entry:hover { background:#263b34; border-color:#d5f59a; }
+.net-entry:nth-child(2):hover { background:#20394f; border-color:#8bc8ff; }
+.net-entry-number { font:700 11px ui-monospace,SFMono-Regular,Consolas,monospace; letter-spacing:.13em; color:var(--net-accent); }
+.net-entry:nth-child(2) .net-entry-number { color:#8bc8ff; }
+.net-entry strong { font-size:clamp(20px,2.6vw,30px); letter-spacing:-.04em; }
+.net-entry strong small { font-size:.6em; font-weight:500; }
+.net-entry > span:last-child { display:flex; justify-content:space-between; align-items:center; color:#c7d8d7; font-size:13px; }
+.net-entry b { font-size:24px; font-weight:400; }
+.net-footnote { font-size:11px; }
+.net-network { display:flex; flex-wrap:wrap; align-items:center; gap:9px 16px; margin-top:22px; border-top:1px solid var(--net-line); padding:13px 0; font-size:11px; color:var(--net-muted); }
+.net-network strong { color:#dce9f1; font-size:12px; }
+.net-live-dot { width:7px; height:7px; border-radius:50%; background:#728899; }
+.net-workspace[data-connected='true'] .net-live-dot { background:var(--net-accent); box-shadow:0 0 0 4px #d5f59a12; }
+.net-network button { margin-left:auto; border:1px solid var(--net-line); border-radius:4px; color:#dfedf3; background:#15283a; padding:8px 12px; font-size:11px; }
+.net-network button:hover { border-color:var(--net-accent); }
+.net-error { margin:16px 0; border:2px solid #ff9b9b; border-radius:6px; padding:22px; background:#42232b; color:#fff0eb; font-size:clamp(18px,2.4vw,28px); font-weight:700; line-height:1.55; word-break:keep-all; }
+.net-join-card { max-width:660px; margin:30px auto; padding:30px; border:1px solid var(--net-line); background:var(--net-panel); border-radius:8px; }
+.net-join-title h2 { font-size:28px; margin:10px 0 28px; letter-spacing:-.04em; }
+.net-join-card fieldset { padding:0; border:0; margin:0 0 26px; }
+.net-join-card legend { font-size:14px; font-weight:700; margin-bottom:13px; }
+.net-join-card legend small { color:var(--net-muted); font-size:10px; font-weight:400; margin-left:6px; }
+.net-code-inputs { display:flex; gap:10px; margin-bottom:14px; }
+.net-code-inputs input { width:64px; height:70px; text-align:center; background:#081523; border:1px solid #607b90; border-radius:5px; color:var(--net-accent); font:750 36px ui-monospace,monospace; text-transform:uppercase; }
+.net-primary { color:#182618; border:1px solid var(--net-accent); background:var(--net-accent); padding:12px 20px; font-weight:750!important; border-radius:5px; }
+.net-primary:hover { background:#e8ffc1; }
+.net-primary:disabled { background:#354950; border-color:#526676; color:#a9bdca; }
+.net-wide { width:100%; }
+.net-muted { color:var(--net-muted); font-size:11px; line-height:1.7; }
+.net-nick-label { display:flex; align-items:center; gap:20px; }
+.net-nick-label input { flex:1; min-width:0; max-width:280px; padding:12px; color:#edf5f9; border:1px solid #607b90; background:#081523; border-radius:4px; }
+.net-team-picks { display:flex; gap:10px; margin-top:15px; }
+.net-team-picks button { flex:1; padding:13px; border:1px solid #416278; background:#0a1926; color:#9fc9ef; border-radius:4px; font-weight:750; }
+.net-team-picks [data-team='red'] { color:#ffb4b1; }
+.net-team-picks [aria-pressed='true'][data-team='blue'] { border-color:#88c6ff; background:#1d3e60; }
+.net-team-picks [aria-pressed='true'][data-team='red'] { border-color:#ff9d97; background:#573139; }
+.net-role-picks { display:grid; grid-template-columns:repeat(3,1fr); gap:8px; }
+.net-role-picks button { border:1px solid #496071; background:#0c1a28; color:#e5f0f6; padding:13px 6px; border-radius:4px; }
+.net-role-picks button small { display:block; margin-top:5px; color:var(--net-muted); font-size:10px; }
+.net-role-picks button[aria-pressed='true']:not(:disabled) { border-color:var(--net-accent); background:#2a3b32; }
+.net-role-picks button:disabled { background:#27333d; color:#9cabb6; }
+.net-live-layout { display:grid; grid-template-columns:320px minmax(0,1fr); gap:18px; margin-top:18px; align-items:start; }
+.net-side { background:var(--net-panel); border:1px solid var(--net-line); border-radius:6px; padding:19px; }
+.net-room-board { border-bottom:1px solid var(--net-line); padding-bottom:15px; }
+.net-room-code { display:block; font:800 clamp(45px,5.2vw,70px)/1.2 ui-monospace,SFMono-Regular,monospace; color:var(--net-accent); letter-spacing:.08em; margin:7px 0 12px; }
+.net-room-url { overflow-wrap:anywhere; color:#9db3c4; font-size:10px; line-height:1.6; margin:10px 0 0; }
+.net-settings { padding-top:15px; }
+.net-settings label { display:grid; grid-template-columns:75px 1fr; gap:8px; align-items:center; margin-bottom:9px; font-size:11px; color:#cbdae5; }
+.net-settings select { width:100%; background:#091723; border:1px solid #3e576a; color:#e8f0f5; font-size:11px; padding:9px 4px; border-radius:4px; }
+.net-roster-section h2 { display:flex; justify-content:space-between; font-size:14px; padding-top:7px; }
+.net-roster-section h2 span { color:var(--net-accent); font-size:12px; }
+.net-roster { max-height:310px; overflow-y:auto; margin-bottom:18px; }
+.net-roster-person { display:flex; align-items:center; gap:9px; padding:12px 0; border-bottom:1px solid #293c4b; }
+.net-team-dot { width:7px; height:25px; background:#6eb9ff; border-radius:2px; }
+.net-roster-person[data-team='red'] .net-team-dot { background:#ff8888; }
+.net-roster-person strong { display:block; font-size:13px; }
+.net-roster-person span:not(.net-team-dot) { display:block; color:var(--net-muted); font-size:10px; margin-top:4px; }
+.net-roster-person small { margin-left:auto; text-align:right; font-size:9px; color:var(--net-muted); line-height:1.7; }
+.net-empty-roster { padding:22px 8px; border:1px dashed #3a5365; text-align:center; color:var(--net-muted); font-size:11px; line-height:1.9; }
+.net-danger { padding:11px 12px; background:#442b31; color:#ffc5bf; border:1px solid #92564f; border-radius:4px; font-weight:700!important; }
+.net-danger:hover { background:#63353c; }
+#net-disarm { width:100%; }
+.net-arena-wrap { position:relative; border:1px solid var(--net-line); border-radius:6px; overflow:hidden; min-height:500px; height:calc(100dvh - 250px); background:#0b1725; }
+.net-scene { position:absolute; inset:0; }
+.net-arena-caption { pointer-events:none; position:absolute; left:14px; right:14px; top:12px; display:flex; justify-content:space-between; gap:15px; color:#d7e4ed; font-size:10px; }
+.net-arena-caption span { padding:7px 9px; background:#0b1825cc; border:1px solid #355064; border-radius:3px; }
+.net-scene-failure { padding:80px 25px; font-size:20px; line-height:1.7; color:#ffbab3; }
+.net-pilot-label { color:#cce4f8; font-weight:750; padding-bottom:15px; margin-bottom:15px; border-bottom:1px solid var(--net-line); }
+.net-flight-status { display:flex; gap:7px; }
+.net-flight-status button { font-size:11px; padding:10px 8px; }
+.net-flight-status .net-armed { color:var(--net-accent); border-color:#a3c675; }
+.net-throttle { margin:18px 0 14px; }
+.net-throttle label { display:flex; align-items:center; justify-content:space-between; color:var(--net-muted); font-size:12px; }
+.net-throttle strong { color:#f1f9ff; font:600 28px ui-monospace,monospace; }
+.net-throttle meter { margin:9px 0; accent-color:var(--net-accent); }
+.net-throttle > span { color:var(--net-muted); font-size:10px; }
+.net-mode { display:flex; padding:4px; border:1px solid var(--net-line); background:#091521; border-radius:5px; gap:4px; }
+.net-mode button { flex:1; padding:8px 5px; color:#a5bdcc; background:transparent; border:1px solid transparent; border-radius:3px; font-size:11px; }
+.net-mode [aria-pressed='true'] { color:#ecf8ff; background:#254052; border-color:#739cb3; }
+.net-sticks { display:flex; justify-content:space-around; margin:17px 0; }
+.net-sticks > div { display:flex; flex-direction:column; align-items:center; gap:7px; }
+.net-sticks span { font-size:9px; color:#b8d0e0; }
+.net-stick-well { width:72px; height:72px; position:relative; border:1px solid #5d7687; border-radius:50%; background:linear-gradient(transparent calc(50% - .5px),#35506b 50%,transparent calc(50% + .5px)),linear-gradient(90deg,transparent calc(50% - .5px),#35506b 50%,transparent calc(50% + .5px)),#091521; }
+.net-stick-well i { position:absolute; left:calc(50% - 5px); top:calc(50% - 5px); width:10px; height:10px; border-radius:50%; background:var(--net-accent); box-shadow:0 0 0 3px #d5f59a20; }
+.net-guide { padding:15px 12px; border:1px solid #536847; border-top:3px solid var(--net-accent); background:#1b2a28; border-radius:4px; }
+.net-guide h2 { margin:6px 0 12px; font-size:17px; letter-spacing:-.04em; }
+.net-guide ol { padding:0; margin:0 0 12px; list-style:none; counter-reset:steps; }
+.net-guide li { counter-increment:steps; padding:7px 5px; margin-bottom:3px; font-size:11px; color:#a5b8b3; border:1px solid transparent; border-radius:3px; }
+.net-guide li::before { content:counter(steps) '  '; white-space:pre; color:#accb96; }
+.net-guide li.active { background:#354638; border-color:#83a866; color:#f2ffe8; }
+.net-guide > strong { display:block; font-size:12px; line-height:1.6; color:var(--net-accent); }
+.net-safety { margin-top:16px; border-top:1px solid var(--net-line); padding-top:14px; font-size:11px; }
+.net-safety p { color:var(--net-muted); font-size:10px; line-height:1.8; }
+.net-copy-fallback { display:block; width:100%; min-height:160px; color:#eaf5ff; background:#122637; border:1px solid #7b9ab2; padding:12px; font:12px monospace; }
+@media(min-width:1300px) { .net-live-layout { grid-template-columns:350px minmax(0,1fr); } .net-room-code { font-size:80px; } }
+@media(max-width:850px) { .net-live-layout { grid-template-columns:260px minmax(0,1fr); gap:10px; } .net-side { padding:13px; } .net-heading h1 { font-size:21px; } .net-arena-caption { flex-direction:column; align-items:flex-start; } .net-entry { padding:22px; gap:21px; } .net-tag { display:none; } .net-room-code { font-size:50px; } }
+@media(max-width:620px) { .net-welcome { margin-top:28px; } .net-entry-grid { grid-template-columns:1fr; gap:13px; } .net-entry { min-height:160px; gap:18px; } .net-join-card { padding:20px 15px; } .net-heading h1 span { display:none; } .net-live-layout { display:flex; flex-direction:column-reverse; } .net-side,.net-arena-wrap { width:100%; } .net-arena-wrap { height:48vh; min-height:280px; } .net-room-code { font-size:70px; } .net-network button { margin-left:0; } .net-code-inputs input { width:55px; height:62px; } .net-join-card legend small { display:block; margin:6px 0 0; } }
+@media(prefers-reduced-motion:reduce) { .net-workspace button { transition:none; } }
+
+/* Live decks own the area below the 64px workspace tabs. Only the side
+   content can scroll; overflow:clip also prevents focus-induced scrolling. */
+#net-panel:has(.net-live-layout) { height:calc(100dvh - 64px); padding:8px 12px; overflow:clip; }
+.net-workspace:is(.net-flight,.net-host) { position:relative; height:100%; min-height:0; max-width:none; display:grid; grid-template-rows:36px minmax(0,1fr) 28px; gap:8px; overflow:clip; }
+.net-workspace:is(.net-flight,.net-host) > .net-heading { padding:0; gap:8px; }
+.net-workspace:is(.net-flight,.net-host) .net-heading .net-kicker { display:none; }
+.net-workspace:is(.net-flight,.net-host) .net-heading h1 { font-size:19px; }
+.net-workspace:is(.net-flight,.net-host) .net-heading > button { padding:6px 12px; }
+.net-live-layout { min-height:0; min-width:0; height:100%; margin:0; grid-template-columns:290px minmax(0,1fr); gap:10px; align-items:stretch; overflow:clip; }
+.net-live-layout > .net-arena-wrap { height:100%; min-height:0; min-width:0; }
+.net-live-layout > .net-side { min-height:0; padding:12px; overflow-y:auto; overscroll-behavior:contain; }
+.net-flight .net-side { display:flex; flex-direction:column; overflow:clip; }
+.net-flight-hud { flex:none; background:var(--net-panel); border-bottom:1px solid var(--net-line); padding-bottom:8px; }
+.net-flight-scroll { flex:1; min-height:0; overflow-y:auto; overscroll-behavior:contain; padding-top:8px; scrollbar-gutter:stable; }
+.net-flight-scroll:focus-visible { outline:2px solid var(--net-accent); outline-offset:-2px; }
+.net-pilot-label { padding-bottom:6px; margin-bottom:6px; font-size:12px; }
+.net-throttle { margin:6px 0 0; }
+.net-throttle strong { font-size:25px; }
+.net-throttle meter { margin:4px 0; }
+.net-sticks { margin:9px 0; }
+.net-sticks > div { gap:4px; }
+.net-guide { padding:8px; }
+.net-guide .net-kicker { margin-bottom:3px; }
+.net-guide h2 { margin:3px 0 6px; font-size:15px; }
+.net-guide ol { margin-bottom:6px; }
+.net-guide li { padding:4px; margin-bottom:1px; }
+.net-safety { margin-top:8px; padding-top:8px; }
+.net-workspace:is(.net-flight,.net-host) > .net-network { min-width:0; margin:0; padding:0; gap:6px 12px; flex-wrap:nowrap; border:0; font-size:10px; }
+.net-workspace:is(.net-flight,.net-host) .net-network button { flex:none; padding:5px 8px; }
+.net-workspace:is(.net-flight,.net-host) #net-copy-result { max-width:25%; white-space:nowrap; overflow:hidden; text-overflow:ellipsis; }
+.net-workspace:is(.net-flight,.net-host) > .net-error:not([hidden]) { position:absolute; z-index:2; top:48px; left:310px; right:16px; max-height:40%; overflow:auto; margin:0; padding:12px; font-size:16px; }
+.net-workspace:is(.net-flight,.net-host) > .net-copy-fallback { position:absolute; z-index:3; right:12px; bottom:36px; width:min(500px,60%); }
+@media(max-width:1100px) { .net-live-layout { grid-template-columns:260px minmax(0,1fr); } .net-workspace:is(.net-flight,.net-host) > .net-error:not([hidden]) { left:280px; } .net-arena-caption { flex-direction:column; align-items:flex-start; gap:4px; } }
+@media(max-width:620px) { .net-live-layout { display:grid; grid-template-columns:minmax(170px,40%) minmax(0,1fr); } .net-live-layout > .net-side { padding:6px; } .net-flight-status { flex-wrap:wrap; } .net-workspace:is(.net-flight,.net-host) > .net-error:not([hidden]) { left:8px; } .net-network #net-stats { display:none; } .net-stick-well { width:58px; height:58px; } }
