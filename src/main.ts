@@ -1,5 +1,5 @@
 import './style.css';
-import { DEG } from './sim/constants';
+import { C, DEG } from './sim/constants';
 import { createFlight, stepFlight } from './sim/flight';
 import { createInput, loseFocus, toggleArm } from './sim/input';
 import { guideStep, needsTakeoff } from './sim/guide';
@@ -7,6 +7,7 @@ import { createFixedClock } from './sim/clock';
 import { CAMERA_NAMES, createScene, type CameraMode } from './render/scene';
 
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
+element('arena-subtitle').textContent = `연습 경기장 ${C.arena.halfLength * 2} × ${C.arena.halfWidth * 2} m`;
 const input = createInput();
 let flight = createFlight();
 const clock = createFixedClock(dt => stepFlight(flight, input, dt));
@@ -74,7 +75,7 @@ catch (error) {
   alert.textContent = '3D 화면을 시작할 수 없습니다. WebGL을 지원하는 브라우저에서 다시 열어 주세요.';
   throw error;
 }
-const keys = new Set(['ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
+const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'KeyQ', 'KeyE', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
 function renderHud() {
   renderGuide();
   arm.textContent = input.armed ? 'ARM · 모터 켜짐' : 'DISARM · 모터 꺼짐';
@@ -131,6 +132,6 @@ function frame(time: number) {
   const elapsed = lastTime === undefined ? 0 : (time - lastTime) / 1000;
   lastTime = time;
   if (!document.hidden) clock.advance(elapsed);
-  renderHud(); view.draw(flight); requestAnimationFrame(frame);
+  renderHud(); view.draw(flight, elapsed); requestAnimationFrame(frame);
 }
 renderHud(); requestAnimationFrame(frame);

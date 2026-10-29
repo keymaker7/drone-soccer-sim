@@ -40,6 +40,7 @@ export function stepFlight(s: FlightState, input: InputState, dt: number): void 
   for (const axis of ['pitch', 'roll'] as const) {
     const rate = axis === 'pitch' ? 'pitchRate' : 'rollRate';
     const target = input.armed ? stick[axis] * C.maxTilt / magnitude : 0;
+    // Semi-implicit Euler at 120 Hz; natural frequency 22 rad/s, critical damping (ratio 1).
     s[rate] += (C.attitudeKp * (target - s[axis]) - C.attitudeKd * s[rate]) * dt;
     s[axis] += s[rate] * dt;
     if (Math.abs(s[axis]) > C.maxTilt) { s[axis] = Math.sign(s[axis]) * C.maxTilt; s[rate] = 0; }

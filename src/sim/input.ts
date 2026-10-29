@@ -15,6 +15,7 @@ export function loseFocus(input: InputState): void {
 }
 export function readInput(input: InputState, dt: number) {
   const axis = (positive: string, negative: string) => Number(input.keys.has(positive)) - Number(input.keys.has(negative));
-  input.throttle = Math.max(0, Math.min(1, input.throttle + axis('ArrowUp', 'ArrowDown') * C.throttleRate * dt));
+  const throttleRate = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight') ? C.fineThrottleRate : C.throttleRate;
+  input.throttle = Math.max(0, Math.min(1, input.throttle + axis('ArrowUp', 'ArrowDown') * throttleRate * dt));
   return { pitch: axis('KeyS', 'KeyW'), roll: axis('KeyD', 'KeyA'), yaw: axis('KeyQ', 'KeyE') };
 }

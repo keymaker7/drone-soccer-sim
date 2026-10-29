@@ -1,5 +1,7 @@
 import * as THREE from 'three';
 import { C } from '../sim/constants';
+import { segmentIntersectsRing } from '../sim/occlusion';
+import { overviewPosition } from './overview';
 import type { FlightState } from '../sim/flight';
 export type CameraMode = 1 | 2 | 3 | 5;
 export const CAMERA_NAMES: Record<CameraMode, string> = { 1: '1 · LOS 조종자', 2: '2 · 추적 관찰', 3: '3 · 경기장 전체', 5: '5 · 심판 측면' };
@@ -44,8 +46,11 @@ export function createScene(container: HTMLElement) {
   const hole = new THREE.Path(); hole.absarc(0, 0, C.goal.innerRadius, 0, Math.PI * 2, true); ring.holes.push(hole);
   const ringGeometry = new THREE.ExtrudeGeometry(ring, { depth: C.goal.depth, bevelEnabled: false, curveSegments: C.render.goalSegments });
   ringGeometry.translate(0, 0, -C.goal.depth / 2);
+  const goals: THREE.Mesh<THREE.ExtrudeGeometry, THREE.MeshStandardMaterial>[] = [];
   for (const side of [-1, 1]) {
     const goal = new THREE.Mesh(ringGeometry, mat(side < 0 ? '#438cff' : '#ff6375'));
+    goal.material.transparent = true;
+    goals.push(goal);
     goal.position.set(side * C.goal.x, C.goal.height, 0); goal.rotation.y = -side * Math.PI / 2; scene.add(goal);
   }
   const drone = new THREE.Group(); scene.add(drone);
@@ -82,24 +87,33 @@ export function createScene(container: HTMLElement) {
     e.preventDefault();
     camera.fov = THREE.MathUtils.clamp(camera.fov + e.deltaY * C.camera.wheelSensitivity, C.camera.minFov, C.camera.maxFov); camera.updateProjectionMatrix();
   }, { passive: false });
+  const overview = new THREE.Vector3();
   function resize() {
     renderer.setSize(container.clientWidth, container.clientHeight);
-    camera.aspect = container.clientWidth / container.clientHeight; camera.updateProjectionMatrix();
+    camera.aspect = container.clientWidth / Math.max(1, container.clientHeight); camera.updateProjectionMatrix();
+    overview.copy(overviewPosition(camera.aspect, C.camera.fov));
   }
   window.addEventListener('resize', resize); resize();
   return {
     get mode() { return mode; },
     setMode(value: CameraMode) { mode = value; offsetX = 0; offsetY = 0; },
-    draw(s: FlightState) {
+    draw(s: FlightState, elapsed = 0) {
       drone.position.set(s.pos.x, s.pos.y, s.pos.z);
       drone.rotation.set(s.roll, s.yaw, s.pitch, 'YZX');
       target.copy(drone.position);
       if (mode === 1) camera.position.set(C.camera.los.x, C.camera.los.y, C.camera.los.z);
       if (mode === 2) camera.position.set(s.pos.x - Math.cos(s.yaw) * C.camera.followDistance, s.pos.y + C.camera.followHeight, s.pos.z + Math.sin(s.yaw) * C.camera.followDistance);
-      if (mode === 3) { camera.position.set(C.camera.overview.x, C.camera.overview.y, C.camera.overview.z); target.set(0, H / 2, 0); }
+      if (mode === 3) { camera.position.copy(overview); target.set(0, H / 2, 0); }
       if (mode === 5) { camera.position.set(C.camera.referee.x, C.camera.referee.y, C.camera.referee.z); target.set(0, H / 2, 0); }
       camera.lookAt(target);
       offset.setFromEuler(new THREE.Euler(offsetY, offsetX, 0, 'YXZ')); camera.quaternion.multiply(offset);
+      for (const goal of goals) {
+        const blocked = segmentIntersectsRing(camera.position, s.pos, { ...C.goal, x: goal.position.x });
+        const opacity = blocked ? C.render.occludedGoalOpacity : 1;
+        const step = (1 - C.render.occludedGoalOpacity) * Math.max(0, elapsed) / C.render.goalFadeSeconds;
+        goal.material.opacity += Math.sign(opacity - goal.material.opacity) * Math.min(step, Math.abs(opacity - goal.material.opacity));
+        goal.material.depthWrite = goal.material.opacity >= 1;
+      }
       renderer.render(scene, camera);
     },
   };

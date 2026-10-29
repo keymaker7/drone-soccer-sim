@@ -51,7 +51,11 @@ describe('비행 모델', () => {
     }
   });
   it('6개 경계 고속 충돌 후 반지름을 포함해 경기장 안에 유지', () => {
-    const bounds = { x: [-7.8, 7.8], y: [0.2, 4.3], z: [-3.3, 3.3] };
+    const bounds = {
+      x: [-C.arena.halfLength + C.radius, C.arena.halfLength - C.radius],
+      y: [C.radius, C.arena.height - C.radius],
+      z: [-C.arena.halfWidth + C.radius, C.arena.halfWidth - C.radius],
+    };
     for (const axis of ['x', 'y', 'z'] as const) for (const sign of [-1, 1]) {
       const { state, input } = airborne(0, false); state.vel[axis] = sign * 10000;
       stepFlight(state, input, C.step);
@@ -108,5 +112,79 @@ describe('120 Hz accumulator', () => {
     let count = 0; const clock = createFixedClock(() => count++);
     clock.advance(10); expect(count).toBe(30);
     clock.advance(C.step / 2); clock.reset(); clock.advance(C.step / 2); expect(count).toBe(30);
+  });
+});
+
+describe('FIX-2 빠른 조종 응답', () => {
+  it.each(['KeyW', 'KeyS', 'KeyA', 'KeyD'])('%s 0.20초 안에 31.5° 기울기, 0.30초 안에 복귀, 오버슈트 및 떨림 없음', key => {
+    const { state, input } = airborne();
+    const axis = key === 'KeyW' || key === 'KeyS' ? 'pitch' : 'roll';
+    input.keys.add(key);
+    let riseTime: number | undefined;
+    let previous = 0;
+    let peak = 0;
+    for (let n = 1; n <= 2 / C.step; n++) {
+      stepFlight(state, input, C.step);
+      const angle = Math.abs(state[axis]) * DEG;
+      if (riseTime === undefined && angle >= 31.5) riseTime = n * C.step;
+      peak = Math.max(peak, angle);
+      expect(angle).toBeGreaterThanOrEqual(previous - 1e-8);
+      previous = angle;
+    }
+    expect(riseTime).toBeDefined();
+    expect(riseTime!).toBeLessThanOrEqual(0.20);
+    expect(peak).toBeLessThanOrEqual(37);
+    input.keys.clear();
+    let returnTime: number | undefined;
+    for (let n = 1; n <= 2 / C.step; n++) {
+      stepFlight(state, input, C.step);
+      const angle = Math.abs(state[axis]) * DEG;
+      if (returnTime === undefined && angle <= 3) returnTime = n * C.step;
+      expect(angle).toBeLessThanOrEqual(previous + 1e-8);
+      previous = angle;
+    }
+    expect(returnTime).toBeDefined();
+    expect(returnTime!).toBeLessThanOrEqual(0.30);
+    expect(previous).toBeLessThan(0.001);
+    if (key === 'KeyW') console.info(`FIX-2 response: rise=${riseTime}s, return=${returnTime}s, peak=${peak}deg`);
+  });
+  it.each(['KeyQ', 'KeyE'])('%s 요 속도 160°/초', key => {
+    const { state, input } = airborne(); input.keys.add(key);
+    run(1, () => stepFlight(state, input, C.step));
+    expect(state.yaw * DEG).toBeCloseTo(key === 'KeyQ' ? 160 : -160, 8);
+  });
+  it.each([undefined, 'ShiftLeft', 'ShiftRight'])('스로틀 %s: 일반 0.9/s, 미세 0.25/s, 상승과 하강', shift => {
+    const input = createInput();
+    input.keys.add('ArrowUp'); if (shift) input.keys.add(shift);
+    const expectedRate = shift ? 0.25 : 0.9;
+    run(0.5, () => readInput(input, C.step));
+    expect(input.throttle).toBeCloseTo(expectedRate * 0.5, 10);
+    input.keys.delete('ArrowUp'); input.keys.add('ArrowDown');
+    run(0.25, () => readInput(input, C.step));
+    expect(input.throttle).toBeCloseTo(expectedRate * 0.25, 10);
+    input.keys.delete('ArrowDown');
+    run(1, () => readInput(input, C.step));
+    expect(input.throttle).toBeCloseTo(expectedRate * 0.25, 10);
+  });
+  it('일반 스로틀은 0%에서 호버까지 약 0.6초', () => {
+    const input = createInput(); input.keys.add('ArrowUp');
+    let steps = 0;
+    while (input.throttle < C.hoverThrottle && steps < 120) { readInput(input, C.step); steps++; }
+    expect(steps * C.step).toBeGreaterThanOrEqual(0.6);
+    expect(steps * C.step).toBeLessThanOrEqual(0.625);
+    console.info(`FIX-2 throttle: hover=${steps * C.step}s`);
+  });
+  it('골대·출발점·카메라는 경기장 크기에 연동', () => {
+    expect(C.goal.x).toBe(C.arena.halfLength - 1.5);
+    expect(C.goal.height).toBe(3);
+    expect(C.start.x).toBe(-C.goal.x + 1);
+    expect(C.start.y).toBe(C.radius);
+    expect(C.camera.los.x).toBe(-C.arena.halfLength - 1.5);
+    expect(C.camera.los.y).toBe(1.7);
+    expect(C.camera.overview.x).toBeLessThan(-C.arena.halfLength);
+    expect(C.camera.overview.y).toBeGreaterThan(C.arena.height);
+    expect(C.camera.overview.z).toBeGreaterThan(C.arena.halfWidth);
+    expect(C.camera.referee.y).toBe(C.arena.height / 2);
+    expect(C.camera.referee.z).toBeGreaterThan(C.arena.halfWidth);
   });
 });

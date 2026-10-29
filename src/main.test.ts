@@ -1,3 +1,4 @@
+import { C } from './sim/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 vi.mock('./render/scene', () => ({
@@ -60,7 +61,7 @@ afterEach(() => { vi.unstubAllGlobals(); });
 describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
   it('로드만으로 이륙하지 않고 단계 2, 넓은 화면 도움말 열림, QA 읽기 전용', () => {
     tick(2000);
-    expect(win.__DRONE_QA!.state()).toMatchObject({ armed: false, throttle: 0, pos: { y: 0.2 } });
+    expect(win.__DRONE_QA!.state()).toMatchObject({ armed: false, throttle: 0, pos: { y: C.start.y } });
     expect(el('startup-guide').dataset.step).toBe('2');
     expect(el('help').open).toBe(true);
     expect(Object.getOwnPropertyDescriptor(win, '__DRONE_QA')).toMatchObject({ writable: false, configurable: false });
@@ -70,8 +71,8 @@ describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
     key('ArrowUp'); tick(1000); key('ArrowUp', 'keyup'); key('Space');
     expect(win.__DRONE_QA!.state().armed).toBe(false);
     expect(el('startup-guide').dataset.step).toBe('1');
-    expect(el('guide-status').textContent).toContain('지금 45%');
-    expect(el('flight-toast').textContent).toContain('스로틀이 45%예요');
+    expect(el('guide-status').textContent).toContain(`지금 ${Math.round(C.throttleRate * 100)}%`);
+    expect(el('flight-toast').textContent).toContain(`스로틀이 ${Math.round(C.throttleRate * 100)}%예요`);
     expect(el('throttle-meter').classes.has('shake')).toBe(true);
     tick(2499); expect(el('flight-toast').hidden).toBe(false);
     tick(1); expect(el('flight-toast').hidden).toBe(true);
@@ -89,7 +90,7 @@ describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
   });
   it('시동→이륙 성공 5초 뒤 숨김→ARM 착지 때 재등장→DISARM 및 초기화', () => {
     key('Space'); expect(el('startup-guide').dataset.step).toBe('3');
-    key('ArrowUp'); tick(1400); key('ArrowUp', 'keyup');
+    key('ArrowUp'); tick(700); key('ArrowUp', 'keyup');
     for (let n = 0; n < 100 && el('startup-guide').dataset.step !== '4'; n++) tick(16);
     expect(el('startup-guide').dataset.step).toBe('4');
     expect(el('guide-status').textContent).toContain('잘했어요!');
@@ -102,7 +103,7 @@ describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
     key('KeyQ'); expect(el('flight-toast').hidden).toBe(false);
     key('Space'); expect(el('startup-guide').dataset.step).toBe('2');
     key('Backspace'); expect(el('startup-guide').hidden).toBe(false);
-    expect(win.__DRONE_QA!.state()).toMatchObject({ armed: false, throttle: 0, pos: { y: 0.2 } });
+    expect(win.__DRONE_QA!.state()).toMatchObject({ armed: false, throttle: 0, pos: { y: C.start.y } });
   });
   it.each(['blur', 'hidden'])('%s 즉시 안전 정지하고 안내 재등장', kind => {
     key('Space'); key('ArrowUp'); tick(1500);
@@ -125,4 +126,22 @@ describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
         key('Space'); expect(win.__DRONE_QA!.state().armed).toBe(true);
       }
     });
+});
+
+describe('FIX-2 UI 및 Shift 키 연결', () => {
+  it('부제는 실제 경기장 치수를 표시', () => {
+    expect(el('arena-subtitle').textContent).toBe(`연습 경기장 ${C.arena.halfLength * 2} × ${C.arena.halfWidth * 2} m`);
+  });
+  it.each(['ShiftLeft', 'ShiftRight'])('%s 누름/해제가 즉시 미세/일반 스로틀로 전환', shift => {
+    key(shift); key('ArrowUp'); tick(1000);
+    expect(win.__DRONE_QA!.state().throttle).toBeCloseTo(0.25, 8);
+    key(shift, 'keyup'); tick(500);
+    expect(win.__DRONE_QA!.state().throttle).toBeCloseTo(0.70, 8);
+    key('ArrowUp', 'keyup'); key(shift); key('ArrowDown'); tick(1000);
+    expect(win.__DRONE_QA!.state().throttle).toBeCloseTo(0.45, 8);
+    win.dispatchEvent(new Event('blur'));
+    key('ArrowUp'); tick(500);
+    expect(win.__DRONE_QA!.state().throttle).toBeCloseTo(0.45, 8);
+    expect(win.__DRONE_QA!.state().armed).toBe(false);
+  });
 });

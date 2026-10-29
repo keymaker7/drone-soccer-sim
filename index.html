@@ -3,9 +3,9 @@
 <head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><title>드론축구 · LOS 비행 연습</title></head>
 <body>
   <main id="app">
-    <header><span class="eyebrow">DRONE SOCCER / STAGE 01</span><h1>LOS 비행 연습</h1><p>파랑 팀 · 스트라이커 1대 · 수동 스로틀</p></header>
+    <header><span class="eyebrow">DRONE SOCCER / STAGE 01</span><h1>LOS 비행 연습</h1><p id="arena-subtitle"></p></header>
     <details id="help" open><summary>조작 키 안내</summary><dl>
-      <dt>↑ / ↓</dt><dd>스로틀 올림 / 내림 · 놓으면 유지</dd>
+      <dt>↑ / ↓</dt><dd>스로틀 올림 / 내림 · 놓으면 유지<br>Shift를 같이 누르면 천천히</dd>
       <dt>W / S</dt><dd>전진 / 후진 기울기</dd><dt>A / D</dt><dd>왼쪽 / 오른쪽 기울기</dd>
       <dt>Q / E</dt><dd>좌 / 우 회전</dd><dt>Space</dt><dd>ARM / DISARM · 스로틀 5% 이하</dd>
       <dt>Backspace</dt><dd>출발점으로 초기화</dd><dt>1 / 2 / 3 / 5</dt><dd>조종자 / 추적 / 전체 / 심판</dd>
@@ -23,7 +23,7 @@
       <ol class="guide-steps">
         <li data-step="1"><span class="step-number">①</span><span><kbd>↓</kbd> 스로틀 0%</span></li>
         <li data-step="2"><span class="step-number">②</span><span><kbd>Space</kbd> 시동</span></li>
-        <li data-step="3"><span class="step-number">③</span><span><kbd>↑</kbd> 꾹 <small>55% 넘으면 떠요</small></span></li>
+        <li data-step="3"><span class="step-number">③</span><span><kbd>↑</kbd> 꾹 <small>55% 넘으면 떠요</small><small>Shift를 같이 누르면 천천히</small></span></li>
         <li data-step="4"><span class="step-number">④</span><span><kbd>W/A/S/D</kbd>로 기울이기</span></li>
       </ol>
       <p id="guide-status" role="status">Space를 눌러 시동을 걸어요</p>
