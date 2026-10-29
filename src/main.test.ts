@@ -2,8 +2,9 @@ import { C } from './sim/constants';
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 
 const netSpies = vi.hoisted(() => ({ setActive: vi.fn(), state: vi.fn(() => ({ role: null, room: '', peers: 0, drones: [], myId: null })) }));
-vi.mock('./net/view', () => ({ mountNet: () => netSpies }));
-vi.mock('./score/view', () => ({ mountScore: () => ({ setActive: vi.fn() }) }));
+const mounts = vi.hoisted(() => ({ net: vi.fn(), score: vi.fn() }));
+vi.mock('./net/view', () => ({ mountNet: (...args: unknown[]) => { mounts.net(...args); return netSpies; } }));
+vi.mock('./score/view', () => ({ mountScore: (...args: unknown[]) => { mounts.score(...args); return { setActive: vi.fn() }; } }));
 vi.mock('./tactics/view', () => ({ mountTactics: () => ({ setActive: vi.fn(), refresh: vi.fn() }) }));
 const sceneSpies = vi.hoisted(() => ({ draw: vi.fn(), setArena: vi.fn(), resize: vi.fn() }));
 vi.mock('./render/scene', () => ({
@@ -68,6 +69,13 @@ beforeEach(async () => { await boot(); });
 afterEach(() => { vi.unstubAllGlobals(); });
 
 describe('시동 안내 실제 엔트리 포인트 이벤트 연결', () => {
+  it('하나의 경기 store를 두 탭에 연결하고 연습 통계는 복사본으로 공개한다', () => {
+    const store = mounts.score.mock.calls.at(-1)![1];
+    expect(mounts.net.mock.calls.at(-1)![1]).toEqual({ match: store });
+    const snapshot = win.__DRONE_QA!.state() as ReturnType<NonNullable<typeof win.__DRONE_QA>['state']> & {practice:{passes:number;rimTouches:number}};
+    expect(snapshot.practice).toEqual({passes:0,rimTouches:0}); snapshot.practice.passes=999;
+    expect(win.__DRONE_QA!.state()).toMatchObject({practice:{passes:0,rimTouches:0}});
+  });
   it('로드만으로 이륙하지 않고 단계 2, 넓은 화면 도움말 열림, QA 읽기 전용', () => {
     tick(2000);
     expect(win.__DRONE_QA!.state()).toMatchObject({ armed: false, throttle: 0, pos: { y: C.start.y } });
@@ -204,7 +212,7 @@ describe('FIX-4 모드 전환 및 실제 HUD 연결', () => {
     else el('mode-1').dispatchEvent(new Event('click'));
     expect(win.__DRONE_QA!.state()).toMatchObject({ stickMode: 2, armed: true });
     expect(el('flight-toast').textContent).toBe('착륙·시동 끈 뒤 바꿔요');
-    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.setItem).not.toHaveBeenCalledWith('drone-soccer-stick-mode', expect.anything());
     key('Space'); el('mode-1').dispatchEvent(new Event('click'));
     expect(win.__DRONE_QA!.state().stickMode).toBe(1);
     key('Backspace');
@@ -330,7 +338,7 @@ describe('FIX-6 쉬운 스로틀 UI', () => {
   it('T와 버튼은 시동 OFF에서만 전환·저장하며 반복 키를 무시', () => {
     key('Space'); key('KeyT');
     expect(win.__DRONE_QA!.state().throttleMode).toBe('easy');
-    expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.setItem).not.toHaveBeenCalledWith('drone-soccer-throttle-mode', expect.anything());
     key('Space'); key('KeyT');
     expect(win.__DRONE_QA!.state().throttleMode).toBe('manual');
     expect(localStorage.setItem).toHaveBeenLastCalledWith('drone-soccer-throttle-mode','manual');

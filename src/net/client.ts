@@ -1,13 +1,14 @@
 import { DEFAULT_ARENA, type Arena } from '../sim/constants';
 import { Interpolator } from './interp';
-import type { Controls, DroneSnapshot, Message, Role, RosterEntry, Team } from './protocol';
+import type { Controls, DroneSnapshot, Message, MatchSnapshot, RuleCall, Role, RosterEntry, Team } from './protocol';
 import { PeerTransport, type Transport } from './transport';
 import type { SessionStatus } from './host';
 type Join = {nick: string; team: Team; role: Role};
 export class ClientSession {
   readonly room: string; status: SessionStatus = 'idle'; error = ''; myId: string | null = null; arena: Arena = DEFAULT_ARENA; maxPerTeam: 3 | 5 = 3;
+  match: (MatchSnapshot & {receivedAt: number}) | null = null; calls: RuleCall[] = [];
   roster: RosterEntry[] = []; drones: DroneSnapshot[] = [];
-  private transport: Transport; private host = ''; private initial?: Join; private listeners = new Set<() => void>(); private interp = new Interpolator();
+  private transport: Transport; private host = ''; private initial?: Join; private listeners = new Set<(event?: 'forcedDisarm') => void>(); private interp = new Interpolator();
   private controls: Controls = {axes:{pitch:0,roll:0,yaw:0},throttle:0,armed:false}; private seq = 0;
   private timer?: ReturnType<typeof setInterval>; private pingTimer?: ReturnType<typeof setInterval>; private rtts: number[] = []; private pending = new Set<number>(); private received: number[] = []; private newestTick = -1;
   constructor(options: {room: string; transport?: Transport} & Partial<Join>) {
@@ -17,8 +18,8 @@ export class ClientSession {
     this.transport.onError(error => { this.error = error; this.status = 'error'; this.changed(); });
     this.transport.onMessage((id, message) => { if (id === this.host) this.receive(message); });
   }
-  onChange(fn: () => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
-  private changed() { for (const fn of this.listeners) fn(); }
+  onChange(fn: (event?: 'forcedDisarm') => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
+  private changed(event?: 'forcedDisarm') { for (const fn of this.listeners) fn(event); }
   async start() {
     this.status = 'connecting'; this.changed();
     try { await this.transport.open({role:'client',room:this.room}); if ((this.status as SessionStatus) === 'closed') return; this.status = 'connected'; if (this.initial) this.join(this.initial);
@@ -38,7 +39,10 @@ export class ClientSession {
   private transmitInput() { if (this.myId && this.status === 'connected') this.transport.send(this.host,{v:1,type:'input',seq:this.seq++,...this.controls}); }
   disarm() { this.controls = {axes:{pitch:0,roll:0,yaw:0},throttle:0,armed:false,throttleMode:this.controls.throttleMode,climb:0,fine:false}; this.transmitInput(); }
   private receive(message: Message) {
-    if (message.type === 'welcome') { this.myId = message.id; this.arena = message.arena; this.maxPerTeam = message.maxPerTeam; this.transmitInput(); }
+    if (message.type === 'match') { const {v:_,type:__,...snapshot} = message; this.match = {...snapshot,receivedAt:performance.now()}; }
+    else if (message.type === 'call') { const {v:_,type:__,...call} = message; this.calls = [...this.calls,call].slice(-5); }
+    else if (message.type === 'disarm') { this.disarm(); this.changed('forcedDisarm'); return; }
+    else if (message.type === 'welcome') { this.myId = message.id; this.arena = message.arena; this.maxPerTeam = message.maxPerTeam; this.transmitInput(); }
     else if (message.type === 'roster') { this.roster = message.roster; if (message.arena) this.arena = message.arena; if (message.maxPerTeam) this.maxPerTeam = message.maxPerTeam; }
     else if (message.type === 'reject') this.error = message.reason;
     else if (message.type === 'state') { if (message.tick <= this.newestTick) return; this.newestTick = message.tick; const now = performance.now(); this.drones = message.drones; this.interp.push(message.tick,message.drones,now); this.received.push(now); this.received = this.received.filter(t => now-t<1000); }
@@ -46,6 +50,7 @@ export class ClientSession {
     else if (message.type === 'ping') this.transport.send(this.host,{v:1,type:'pong',t:message.t});
     this.changed();
   }
+  remaining(now = performance.now()) { return this.match ? Math.max(0,this.match.remaining-(this.match.running ? now-this.match.receivedAt : 0)) : 0; }
   sample(now = performance.now()) { return this.interp.sample(now); }
   async stats() { const s = await this.transport.stats(this.host); const now = performance.now(); return {...s,rttMs:this.rtts.length ? Math.round(this.rtts.reduce((a,b)=>a+b,0)/this.rtts.length) : s.rttMs,statesPerSec:this.received.filter(t => now-t<1000).length}; }
   private stopTimers() { if (this.timer) clearInterval(this.timer); if (this.pingTimer) clearInterval(this.pingTimer); }

@@ -1,15 +1,13 @@
-import { createMatch, exportCSV, formatClock, matchReducer, restoreMatch, serializeMatch } from './match';
-import type { MatchEvent, MatchState, Settings, Team } from './match';
+import { exportCSV, formatClock } from './match';
+import type { MatchStore } from './store';
+import type { MatchEvent, Settings, Team } from './match';
 import './style.css';
 
-const STORAGE_KEY = 'drone-soccer-match-v1';
 const PHASES = { ready: '준비', playing: '경기', maintenance: '정비', finished: '종료' };
-export function mountScore(container: HTMLElement): { setActive(active: boolean): void; dispatch(event: MatchEvent): void } {
+export function mountScore(container: HTMLElement, store: MatchStore): { setActive(active: boolean): void; dispatch(event: MatchEvent): void } {
   let active = false;
-  let state = createMatch();
+  let state = store.get();
   let audio: AudioContext | undefined;
-  let storageFailed = false;
-  try { state = restoreMatch(localStorage.getItem(STORAGE_KEY), Date.now()); } catch { storageFailed = true; }
   container.classList.add('score-view');
   container.innerHTML = `<header class="score-heading"><div><span class="score-eyebrow">DRONE SOCCER · MATCH CONTROL</span><h1>우리들의 경기, 지금 시작.</h1></div></header>
   <div class="score-arena"><section class="score-team score-blue" data-team="blue"></section><section class="score-clock-panel"><span class="score-set"></span><strong class="score-phase"></strong><output class="score-clock" aria-label="남은 시간"></output><span class="score-running"></span><div class="score-main-controls"><button data-action="clock" class="score-primary"></button><button data-action="undo">↶ 되돌리기</button></div></section><section class="score-team score-red" data-team="red"></section></div>
@@ -22,7 +20,6 @@ export function mountScore(container: HTMLElement): { setActive(active: boolean)
   for (const team of ['blue', 'red'] as const) {
     find(`[data-team="${team}"]`).innerHTML = `<label class="score-name-label">${team === 'blue' ? 'BLUE' : 'RED'} TEAM · 이름을 눌러 변경<input class="score-name" aria-label="${team === 'blue' ? '파랑' : '빨강'} 팀 이름" maxlength="40" data-name="${team}"></label><div class="score-wins" aria-label="세트 승수"></div><output class="score-number" aria-label="점수"></output><div class="score-offside">OFFSIDE</div><div class="score-points"><button data-action="score" data-team="${team}" data-delta="-1" aria-label="${team} 감점">−1</button><button data-action="score" data-team="${team}" data-delta="1" class="score-add">득점 +1</button></div><div class="score-team-tools"><button data-action="offside" data-team="${team}"></button><button data-action="penalty" data-team="${team}">페널티 +1</button></div><span class="score-penalties"></span>`;
   }
-  const save = () => { try { localStorage.setItem(STORAGE_KEY, serializeMatch(state)); storageFailed = false; } catch { storageFailed = true; } find('.score-save-status').textContent = storageFailed ? '저장할 수 없어 현재 창에서만 유지됩니다' : '이 브라우저에 자동 저장'; };
   function beep(frequency = 660): void {
     if (!active || state.muted) return;
     try {
@@ -35,6 +32,7 @@ export function mountScore(container: HTMLElement): { setActive(active: boolean)
     } catch { /* Audio is optional; match controls remain usable. */ }
   }
   function render(): void {
+    find('.score-save-status').textContent = store.storageFailed ? '저장할 수 없어 현재 창에서만 유지됩니다' : '이 브라우저에 자동 저장';
     find('.score-set').textContent = `SET ${state.set} / 3`;
     find('.score-phase').textContent = PHASES[state.phase];
     find('.score-clock').textContent = formatClock(state.remaining);
@@ -74,15 +72,15 @@ export function mountScore(container: HTMLElement): { setActive(active: boolean)
     if (!state.records.length) { const row = body.insertRow(); const cell = row.insertCell(); cell.colSpan = 6; cell.textContent = '첫 휘슬을 기다리고 있어요. 경기 사건이 여기에 기록됩니다.'; }
     find('.score-record-count').textContent = String(state.records.length);
   }
-  function dispatch(event: MatchEvent): void {
-    const previous: MatchState = state;
-    state = matchReducer(state, event);
-    const changed = event.type !== 'tick' || previous.phase !== state.phase || previous.records.length !== state.records.length;
-    if (changed) { save(); render(); }
+  const dispatch = (event: MatchEvent) => store.dispatch(event);
+  store.subscribe((next, previous, event) => {
+    state = next;
+    const changed = event?.type !== 'tick' || previous.phase !== state.phase || previous.records.length !== state.records.length;
+    if (changed) render();
     else { find('.score-clock').textContent = formatClock(state.remaining); find('.score-clock-panel').classList.toggle('is-final-seconds', state.running && state.remaining <= 5000); }
     if ((!previous.running && state.running) || previous.phase !== state.phase) beep(state.phase === 'playing' ? 880 : 440);
     else if (state.running && Math.ceil(previous.remaining / 1000) !== Math.ceil(state.remaining / 1000) && state.remaining > 0 && state.remaining <= 5000) beep();
-  }
+  });
   const clock = () => dispatch({ type: state.running ? 'pause' : 'start', now: Date.now() });
   function download(format: 'csv' | 'json'): void {
     const blob = new Blob([format === 'csv' ? exportCSV(state) : JSON.stringify({ teams: state.teams, results: state.results, records: state.records }, null, 2)], { type: format === 'csv' ? 'text/csv;charset=utf-8' : 'application/json' });
@@ -111,12 +109,7 @@ export function mountScore(container: HTMLElement): { setActive(active: boolean)
     else return;
     e.preventDefault();
   });
-  window.addEventListener('storage', event => {
-    if (event.key !== STORAGE_KEY) return;
-    state = restoreMatch(event.newValue, Date.now());
-    render();
-  });
   setInterval(() => { if (state.running) dispatch({ type: 'tick', now: Date.now() }); }, 200);
-  render(); save();
+  render();
   return { setActive(value) { active = value; if (value) dispatch({ type: 'tick', now: Date.now() }); }, dispatch };
 }

@@ -1,4 +1,5 @@
 import { climbControl } from './climb';
+import { collideRing, ringsFor } from '../rules/ring';
 import { C, MAX_THRUST, DEFAULT_ARENA, layoutFor, type Arena } from './constants';
 import { readInput, type InputState } from './input';
 export interface Vec3 { x: number; y: number; z: number }
@@ -33,6 +34,7 @@ export function collide(s: FlightState, arena: Arena = DEFAULT_ARENA): void {
     if (s.pos[axis] < lo) { s.pos[axis] = lo; if (s.vel[axis] < 0) s.vel[axis] *= -C.restitution; }
     if (s.pos[axis] > hi) { s.pos[axis] = hi; if (s.vel[axis] > 0) s.vel[axis] *= -C.restitution; }
   }
+  for (const ring of Object.values(ringsFor(arena))) collideRing(s, ring);
 }
 export function stepFlight(s: FlightState, input: InputState, dt: number, arena: Arena = DEFAULT_ARENA, axes?: { pitch: number; roll: number; yaw: number }): void {
   const stick = axes ?? readInput(input, dt);

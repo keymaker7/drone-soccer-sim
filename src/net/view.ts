@@ -7,10 +7,11 @@ import { axesFromKeys } from '../sim/keymap';
 import { guideStep } from '../sim/guide';
 import { createNetScene } from '../render/net-scene';
 import { HostSession } from './host';
+import type { MatchStore } from '../score/store';
 import { ClientSession } from './client';
 import { generateRoomCode, normalizeRoomCode, rolesFor, ROLE_LABELS, type Team, type Role } from './protocol';
 
-export function mountNet(root: HTMLElement) {
+export function mountNet(root: HTMLElement, options: { match?: MatchStore } = {}) {
   let active = false;
   let page: 'home' | 'join' | 'host' | 'flight' = 'home';
   let session: HostSession | ClientSession | undefined;
@@ -47,7 +48,8 @@ export function mountNet(root: HTMLElement) {
     peerStats = {}; message = ''; nickDraft = ''; page = 'home'; render();
   }
   function watch() {
-    unsubscribe = session?.onChange(() => {
+    unsubscribe = session?.onChange((event?: 'forcedDisarm') => {
+      if (event === 'forcedDisarm') input.armed = false;
       const c = client();
       const remote = c?.drones.find(d => d.id === c.myId);
       if (c && (c.status === 'closed' || c.status === 'error')) loseFocus(input);
@@ -87,7 +89,7 @@ export function mountNet(root: HTMLElement) {
       body = `<div class="net-live-layout"><aside class="net-side">${page === 'host' ? hostMarkup() : flightMarkup()}</aside><section class="net-arena-wrap" aria-label="함께 비행 경기장"><div id="net-scene" class="net-scene"></div><div class="net-arena-caption"><span>${page === 'host' ? '전체 경기장' : '우리 팀 조종석 · LOS'}</span><span>${page === 'host' ? '3 전체 보기 / 5 심판 시점' : '내 드론도 선생님 PC에서 받은 위치로 보여요'}</span></div></section></div>`;
     }
     root.innerHTML = top + `<div id="net-error" class="net-error" role="alert" hidden></div>` + body + statusMarkup();
-    button('create', () => { page = 'host'; session = new HostSession({ room: generateRoomCode(), arena: DEFAULT_ARENA, maxPerTeam: 3 }); watch(); render(); void session.start().catch(handleError); });
+    button('create', () => { page = 'host'; session = new HostSession({match:options.match, room: generateRoomCode(), arena: DEFAULT_ARENA, maxPerTeam: 3 }); watch(); render(); void session.start().catch(handleError); });
     button('join-screen', () => { page = 'join'; render(); });
     button('leave', leave); button('copy', () => { void copyResults(); });
     if (page === 'join') bindJoin();

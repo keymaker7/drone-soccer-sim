@@ -1,6 +1,7 @@
 import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import { createMatch, matchReducer, restoreMatch, serializeMatch } from './match';
 import { mountScore } from './view';
+import { createMatchStore } from './store';
 
 // DOM doubles verify actual wiring; these are not browser layout/native activation tests.
 class Node extends EventTarget {
@@ -32,6 +33,7 @@ let doc: { activeElement: Node | null; createElement(): Node };
 let stored: Map<string, string>;
 let setItem: ReturnType<typeof vi.fn>;
 let score: ReturnType<typeof mountScore>;
+let store: ReturnType<typeof createMatchStore>;
 function persisted() { return restoreMatch(stored.get(KEY) ?? null, Date.now()); }
 function key(code: string, key: string, target = new Node(), shiftKey = false) {
   const event = new Event('keydown', { cancelable: true });
@@ -49,10 +51,17 @@ beforeEach(() => {
   setItem = vi.fn((key: string, value: string) => stored.set(key, value));
   vi.stubGlobal('window', win); vi.stubGlobal('document', doc);
   vi.stubGlobal('localStorage', { getItem: (key: string) => stored.get(key) ?? null, setItem });
-  score = mountScore(root as unknown as HTMLElement);
+  store = createMatchStore(createMatch(), true);
+  score = mountScore(root as unknown as HTMLElement, store);
 });
 afterEach(() => { vi.clearAllTimers(); vi.useRealTimers(); vi.unstubAllGlobals(); });
 describe('score view real event wiring', () => {
+  it('renders automatic events dispatched by the shared host store', () => {
+    store.dispatch({ type: 'score', team: 'blue', delta: 1, by: '하늘 · 스트라이커', auto: true, now: Date.now() });
+    expect(root.querySelector('[data-team="blue"]').querySelector('.score-number').textContent).toBe('1');
+    expect(root.querySelector('tbody').children).toHaveLength(1);
+    click('score', 'red', '1'); expect(store.get().teams.red.score).toBe(1);
+  });
   it('scopes shortcuts to active tab and excludes edited names', () => {
     key('Digit1', '1'); expect(persisted().teams.blue.score).toBe(0);
     score.setActive(true); key('Digit1', '1'); expect(persisted().teams.blue.score).toBe(1);
@@ -79,7 +88,7 @@ describe('score view real event wiring', () => {
   it('restores persisted deadline on mount and synchronizes storage without feedback writes', () => {
     const running = matchReducer(createMatch(), { type: 'start', now: 0 });
     stored.set(KEY, serializeMatch(running)); vi.setSystemTime(5000);
-    const otherRoot = new Node(); mountScore(otherRoot as unknown as HTMLElement);
+    const otherRoot = new Node(); mountScore(otherRoot as unknown as HTMLElement, createMatchStore(createMatch(), true));
     expect(otherRoot.querySelector('.score-clock').textContent).toBe('00:05');
     const remote = matchReducer(running, { type: 'score', team: 'blue', delta: 1, now: 5000 });
     const event = new Event('storage'); Object.assign(event, { key: KEY, newValue: serializeMatch(remote) });

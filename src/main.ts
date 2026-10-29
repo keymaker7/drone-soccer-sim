@@ -10,6 +10,9 @@ import { createFixedClock } from './sim/clock';
 import { CAMERA_NAMES, createScene, type CameraMode } from './render/scene';
 
 import { mountScore } from './score/view';
+import { createMatch } from './score/match';
+import { createMatchStore } from './score/store';
+import { createPractice, practiceStep } from './rules/practice';
 import { mountTactics } from './tactics/view';
 import { mountNet } from './net/view';
 
@@ -37,7 +40,8 @@ const throttleUp = () => input.stickMode === 2 ? 'W' : '↑';
 const throttleDown = () => input.stickMode === 2 ? 'S' : '↓';
 const tiltKeys = () => input.stickMode === 2 ? '방향키' : 'W/S · ←/→';
 let flight = createFlight(arena);
-const clock = createFixedClock(dt => stepFlight(flight, input, dt, arena));
+let practice = createPractice(arena);
+const clock = createFixedClock(dt => { const prev = { ...flight.pos }; stepFlight(flight, input, dt, arena); practiceStep(practice, prev, flight.pos); });
 const notice = element('notice');
 const arm = element('arm');
 const throttle = element('throttle');
@@ -197,7 +201,7 @@ window.addEventListener('keydown', e => {
   }
   if (e.code === 'Backspace') {
     successAt = undefined; toastUntil = 0; refusalUntil = 0; lastGroundHint = -Infinity;
-    loseFocus(input); flight = createFlight(arena); clock.reset(); notice.textContent = '출발점 초기화 · 스로틀 0% · DISARM';
+    loseFocus(input); flight = createFlight(arena); practice = createPractice(arena); clock.reset(); notice.textContent = '출발점 초기화 · 스로틀 0% · DISARM';
   }
   const mode = Number(e.code.replace('Digit', ''));
   if ([1, 2, 3, 5].includes(mode)) view?.setMode(mode as CameraMode);
@@ -214,12 +218,13 @@ window.addEventListener('blur', safetyStop);
 document.addEventListener('visibilitychange', () => { if (document.hidden) safetyStop(); });
 const qa = Object.freeze({ state: () => ({
   throttleMode: input.throttleMode, vy: flight.vel.y, stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
-  stick: { ...input.stick }, net: netView.state(),
+  stick: { ...input.stick }, net: netView.state(), practice: { passes: practice.passes, rimTouches: practice.rimTouches },
   rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view?.mode ?? 1, arena: arenaSize(), tab,
 }) });
 Object.defineProperty(window, '__DRONE_QA', { value: qa, writable: false, configurable: false });
-const netView = mountNet(element('net-root'));
-const scoreView = mountScore(element('score-root'));
+const match = createMatchStore(createMatch(), true);
+const netView = mountNet(element('net-root'), { match });
+const scoreView = mountScore(element('score-root'), match);
 const tacticsView = mountTactics(element('tactics-root'), arenaSize);
 function renderMap() {
   for (const id of mapIds) element(`map-${id}`).setAttribute('aria-pressed', String(mapId === id));
@@ -232,7 +237,7 @@ function changeMap(next: MapId) {
   if (mapId === next) return;
   loseFocus(input); clock.reset();
   mapId = next; arena = ARENA_PRESETS[next].arena;
-  flight = createFlight(arena); view?.setArena(arena);
+  flight = createFlight(arena); practice = createPractice(arena); view?.setArena(arena);
   successAt = undefined; toastUntil = 0; refusalUntil = 0; lastGroundHint = -Infinity;
   try { localStorage.setItem('drone-soccer-arena', next); } catch { /* Keep selection for this session. */ }
   notice.textContent = '경기장 변경 · 출발점으로 이동 · 스로틀 0% · DISARM';
@@ -288,7 +293,7 @@ document.addEventListener('visibilitychange', () => { if (document.hidden) stopF
 window.addEventListener('storage', e => {
   if (e.key !== 'drone-soccer-arena' || !mapIds.includes(e.newValue as MapId) || input.armed) return;
   mapId = e.newValue as MapId; arena = ARENA_PRESETS[mapId].arena;
-  loseFocus(input); flight = createFlight(arena); clock.reset(); view?.setArena(arena);
+  loseFocus(input); flight = createFlight(arena); practice = createPractice(arena); clock.reset(); view?.setArena(arena);
   renderMap(); renderHud(); tacticsView.refresh();
 });
 renderMap(); selectTab(tab);

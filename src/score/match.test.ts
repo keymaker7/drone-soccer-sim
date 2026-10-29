@@ -77,3 +77,27 @@ describe('match reducer', () => {
     expect(s.phase).toBe('playing'); expect(s.teams.blue.wins).toBe(0); expect(s.results).toHaveLength(0); expect(s.running).toBe(false);
   });
 });
+
+describe('automatic match records', () => {
+  it('sets offside idempotently and preserves manual toggle', () => {
+    let s = dispatch(createMatch(), { type: 'offside', team: 'blue', on: true, by: '하늘 · 스트라이커', auto: true, now: 0 });
+    s = dispatch(s, { type: 'offside', team: 'blue', on: true, now: 10 });
+    expect(s.records).toHaveLength(1); expect(s.history).toHaveLength(1);
+    expect(s.records[0]).toMatchObject({ drone: '하늘 · 스트라이커', auto: true });
+    s = dispatch(s, { type: 'offside', team: 'blue', now: 20 });
+    expect(s.teams.blue.offside).toBe(false); expect(s.records).toHaveLength(2);
+  });
+  it('records automatic score and penalty metadata and exports aircraft column', () => {
+    let s = dispatch(createMatch(), { type: 'score', team: 'blue', delta: 1, by: '하늘 · 스트라이커', auto: true, now: 0 });
+    s = dispatch(s, { type: 'penalty', team: 'red', by: '구름 · 키퍼', auto: true, reason: 'own-goal-back', now: 10 });
+    expect(s.records[0]).toMatchObject({ drone: '하늘 · 스트라이커', auto: true });
+    expect(s.records[1]).toMatchObject({ drone: '구름 · 키퍼', auto: true, reason: 'own-goal-back' });
+    expect(exportCSV(s)).toContain('"기체"'); expect(exportCSV(s)).toContain('"하늘 · 스트라이커"');
+    expect(restoreMatch(serializeMatch(s), 20).records).toEqual(s.records);
+  });
+  it('restores old v1 records without aircraft or automatic fields', () => {
+    const s = dispatch(createMatch(), { type: 'score', team: 'blue', delta: 1, now: 0 });
+    expect(s.records[0]).not.toHaveProperty('drone'); expect(s.records[0]).not.toHaveProperty('auto');
+    expect(restoreMatch(JSON.stringify({ version: 1, state: s }), 10)).toEqual(s);
+  });
+});

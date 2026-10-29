@@ -6,13 +6,13 @@ const doubles = vi.hoisted(() => {
     room: string; status = 'idle'; error = ''; myId: string | null = null;
     arena = {halfLength:12,halfWidth:5.25,height:6}; maxPerTeam: 3|5 = 3;
     roster: RosterEntry[] = []; drones: DroneSnapshot[] = [];
-    callbacks = new Set<() => void>();
+    callbacks = new Set<(event?: 'forcedDisarm') => void>();
     sendInput = vi.fn<(controls: Controls) => void>();
     disarm = vi.fn();
     close = vi.fn(() => { this.status = 'closed'; this.emit(); });
     constructor(options: {room:string}) { this.room = options.room; }
-    onChange(fn: () => void) { this.callbacks.add(fn); return () => this.callbacks.delete(fn); }
-    emit() { for (const fn of this.callbacks) fn(); }
+    onChange(fn: (event?: 'forcedDisarm') => void) { this.callbacks.add(fn); return () => this.callbacks.delete(fn); }
+    emit(event?: 'forcedDisarm') { for (const fn of this.callbacks) fn(event); }
     async start() { this.status = 'connected'; this.emit(); }
     sample() { return this.drones; }
     async stats() { return {linkType:'직접(같은 와이파이)',rttMs:12,statesPerSec:30,disconnects:0,peers:1}; }
@@ -168,6 +168,12 @@ describe('NET-1 actual UI event wiring (offline)',()=>{
     expect(current().disarm).toHaveBeenCalled();
     if(kind==='pagehide') expect(current().close).toHaveBeenCalled();
     else { doc.hidden=false; view.setActive(true); tick(16); expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({armed:false,throttle:0,axes:{pitch:0,roll:0,yaw:0}}); }
+  });
+  it('forcedDisarm clears local ARM even before an armed snapshot arrives',async()=>{
+    await enterFlight(); key('Space'); expect(el('arm').textContent).toBe('ARM · 모터 켜짐');
+    current().emit('forcedDisarm'); tick(16);
+    expect(el('arm').textContent).toBe('DISARM · 모터 꺼짐');
+    expect(current().sendInput.mock.calls.at(-1)?.[0].armed).toBe(false);
   });
   it('authoritative true-to-false disarm resets controls, while initial false does not cancel ARM',async()=>{
     await enterFlight(); key('Space'); current().emit();
