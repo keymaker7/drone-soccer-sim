@@ -140,7 +140,7 @@ describe('NET-1 actual UI event wiring (offline)',()=>{
     expect([0,1,2,3].map(n=>el(`code-${n}`).value).join('')).toBe('ABCD');
     expect(doubles.Client.instances).toHaveLength(0);
     expect(el('enter').disabled).toBe(true);
-    expect(localStorage.getItem).not.toHaveBeenCalled(); expect(localStorage.setItem).not.toHaveBeenCalled();
+    expect(localStorage.getItem).toHaveBeenCalled(); expect(localStorage.setItem).not.toHaveBeenCalled();
   });
   it('changing room code invalidates the connected observer and disables entry',async()=>{
     await boot('#join=ABCD'); el('connect').click(); await Promise.resolve();
@@ -158,7 +158,7 @@ describe('NET-1 actual UI event wiring (offline)',()=>{
     observer.maxPerTeam=5; observer.emit(); expect(el('roles').querySelectorAll()).toHaveLength(5);
   });
   it.each(['tab','blur','hidden','pagehide'])('%s immediately disarms and clears held throttle',async kind=>{
-    await enterFlight(); key('Space'); key('KeyW'); tick(800);
+    await enterFlight(); el('throttle-manual').click(); key('Space'); key('KeyW'); tick(800);
     expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({armed:true});
     expect(current().sendInput.mock.calls.at(-1)?.[0].throttle).toBeGreaterThan(0);
     current().disarm.mockClear();
@@ -188,12 +188,68 @@ describe('NET-1 actual UI event wiring (offline)',()=>{
     expect(el('error').textContent).toBe('방이 닫혔어요'); expect(el('arm').textContent).toBe('DISARM · 모터 꺼짐');
   });
   it('ARM threshold and armed mode-switch restrictions use existing input rules',async()=>{
-    await enterFlight(); key('KeyW'); tick(1000); key('KeyW','keyup'); key('Space');
+    await enterFlight(); el('throttle-manual').click(); vi.mocked(localStorage.setItem).mockClear(); key('KeyW'); tick(1000); key('KeyW','keyup'); key('Space');
     expect(current().sendInput.mock.calls.at(-1)?.[0].armed).toBe(false); expect(el('error').textContent).toContain('시동이 안 걸려요');
     key('Backspace'); key('Space'); el('mode-1').click();
     expect(el('mode-2').attributes.get('aria-pressed')).toBe('true');
     key('Space'); el('mode-1').click(); expect(el('mode-1').attributes.get('aria-pressed')).toBe('true');
     expect(localStorage.setItem).not.toHaveBeenCalled();
+  });
+  it('defaults to easy and sends held climb and fine immediately, centering the spring stick on release',async()=>{
+    await enterFlight();
+    expect(view.state().throttleMode).toBe('easy');
+    expect(el('left-dot').style.transform).toBe('translate(0px,0px)');
+    key('Space'); key('KeyW');
+    expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({throttleMode:'easy',climb:1,fine:false,armed:true});
+    expect(el('left-dot').style.transform).toBe('translate(0px,-25px)');
+    key('ShiftLeft');
+    expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({climb:1,fine:true});
+    key('KeyW','keyup');
+    expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({climb:0});
+    expect(el('left-dot').style.transform).toBe('translate(0px,0px)');
+    key('KeyS'); expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({climb:-1});
+  });
+  it('easy ARM blocks held up keys and T only changes throttle while disarmed',async()=>{
+    await enterFlight(); key('KeyW'); key('Space');
+    expect(current().sendInput.mock.calls.at(-1)?.[0].armed).toBe(false);
+    expect(el('error').textContent).toContain('올림 키에서 손을 뗀 뒤');
+    key('KeyW','keyup'); key('Space'); key('KeyT');
+    expect(view.state().throttleMode).toBe('easy');
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    key('Space'); key('KeyT');
+    expect(view.state().throttleMode).toBe('manual');
+    expect(localStorage.setItem).toHaveBeenCalled();
+    el('throttle-easy').click(); expect(view.state().throttleMode).toBe('easy');
+  });
+  it('refreshes the saved preference on tab activation without writing it',async()=>{
+    await enterFlight(); view.setActive(false);
+    vi.mocked(localStorage.getItem).mockReturnValue('manual');
+    view.setActive(true);
+    expect(view.state().throttleMode).toBe('manual');
+    expect(el('throttle-manual').attributes.get('aria-pressed')).toBe('true');
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+  });
+  it.each(['tab','blur','hidden','pagehide'])('easy %s safety clears climb and fine before resuming',async kind=>{
+    await enterFlight(); key('Space'); key('KeyW'); key('ShiftLeft');
+    if(kind==='tab') view.setActive(false);
+    else if(kind==='hidden') { doc.hidden=true; doc.dispatchEvent(new Event('visibilitychange')); }
+    else win.dispatchEvent(new Event(kind));
+    expect(current().disarm).toHaveBeenCalled();
+    if(kind!=='pagehide') {
+      doc.hidden=false; view.setActive(true); tick(16);
+      expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({armed:false,throttleMode:'easy',climb:0,fine:false});
+    }
+  });
+  it('mode 1 easy uses arrow climb and displays authoritative thrust and vertical speed',async()=>{
+    await enterFlight(); el('mode-1').click(); key('ArrowUp');
+    expect(current().sendInput.mock.calls.at(-1)?.[0]).toMatchObject({climb:1});
+    expect(el('right-dot').style.transform).toBe('translate(0px,-25px)');
+    expect(el('step-3').textContent).toContain('↑ 꾹');
+    key('ArrowUp','keyup'); key('Space');
+    Object.assign(current().drones[0],{motorThrottle:.63,vy:-.5}); current().emit();
+    expect(el('throttle').textContent).toBe('63%');
+    expect(el('vertical-speed').textContent).toBe('하강 −0.5 m/s');
+    expect(view.state().vy).toBe(-.5);
   });
   it('host buttons disarm all; changing tab keeps host session running',()=>{
     el('create').click(); const host=doubles.Host.instances[0]; el('disarm').click(); expect(host.disarmAll).toHaveBeenCalledOnce();

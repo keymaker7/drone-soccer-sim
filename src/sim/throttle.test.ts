@@ -4,7 +4,7 @@ import { createInput, loseFocus, readInput, releaseKey, toggleArm } from './inpu
 import { acceleration, createFlight, stepFlight } from './flight';
 
 function hold(start: number, seconds: number, direction = 'KeyW', shift?: string, step: number = C.step) {
-  const input = createInput(); input.throttle = start;
+  const input = createInput('manual'); input.throttle = start;
   input.keys.add(direction); if (shift) input.keys.add(shift);
   for (let t = 0; t < seconds - 1e-12; t += step) readInput(input, Math.min(step, seconds - t));
   return input;
@@ -12,7 +12,7 @@ function hold(start: number, seconds: number, direction = 'KeyW', shift?: string
 
 describe('FIX-3 구간별 스로틀', () => {
   it('0 → 55%는 1.5초 이하', () => {
-    const input = createInput(); input.keys.add('KeyW');
+    const input = createInput('manual'); input.keys.add('KeyW');
     let elapsed = 0;
     while (input.throttle < 0.55 && elapsed < 2) { readInput(input, C.step); elapsed += C.step; }
     expect(elapsed).toBeLessThanOrEqual(1.5);
@@ -41,7 +41,7 @@ describe('FIX-3 구간별 스로틀', () => {
     for (const direction of [-1, 1]) {
       const start = boundary - direction * 0.01;
       const key = direction > 0 ? 'KeyW' : 'KeyS';
-      const input = createInput(); input.throttle = start; input.keys.add(key);
+      const input = createInput('manual'); input.throttle = start; input.keys.add(key);
       let previous = start;
       for (let i = 0; i < 60; i++) {
         readInput(input, C.step);
@@ -75,7 +75,7 @@ describe('FIX-3 구간별 스로틀', () => {
 
 describe('FIX-3 모터 추력 지연 및 안전', () => {
   it('55 → 75% 계단, 0.08초 뒤 63% ± 5% 및 정확한 1차 응답', () => {
-    const state = createFlight(), input = createInput();
+    const state = createFlight(), input = createInput('manual');
     input.armed = true; input.motorThrottle = 0.55; input.throttle = 0.75;
     stepFlight(state, input, 0.08);
     expect(input.motorThrottle).toBeCloseTo(0.75 - 0.2 / Math.E, 10);
@@ -86,7 +86,7 @@ describe('FIX-3 모터 추력 지연 및 안전', () => {
     console.info(`FIX-3 motor after 0.08s: ${input.motorThrottle * 100}%`);
   });
   it.each(['disarm', 'blur/hidden', 'step'])('%s는 지연 없이 모터 0, 잔류 추력 없음', action => {
-    const state = createFlight(), input = createInput();
+    const state = createFlight(), input = createInput('manual');
     input.armed = true; input.throttle = 0.75; input.motorThrottle = 0.75;
     if (action === 'disarm') toggleArm(input);
     else if (action === 'blur/hidden') loseFocus(input);

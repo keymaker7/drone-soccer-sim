@@ -2,7 +2,8 @@ import './style.css';
 import { axesFromKeys, type StickMode } from './sim/keymap';
 import { DEG, ARENA_PRESETS, type Arena } from './sim/constants';
 import { createFlight, stepFlight } from './sim/flight';
-import { createInput, loseFocus, releaseKey, toggleArm } from './sim/input';
+import { createInput, loseFocus, releaseKey, toggleArm, changeThrottleMode, loadThrottleMode, saveThrottleMode } from './sim/input';
+import type { ThrottleMode } from './sim/climb';
 import { guideStep, needsTakeoff } from './sim/guide';
 import { createFixedClock } from './sim/clock';
 import { CAMERA_NAMES, createScene, type CameraMode } from './render/scene';
@@ -26,6 +27,9 @@ const arenaSize = () => ({ length: arena.halfLength * 2, width: arena.halfWidth 
 const element = <T extends HTMLElement>(id: string) => document.getElementById(id) as T;
 
 const input = createInput();
+input.throttleMode = loadThrottleMode();
+const isEasy = () => input.throttleMode === 'easy';
+const upHeld = () => input.keys.has(input.stickMode === 2 ? 'KeyW' : 'ArrowUp');
 const modeStorageKey = 'drone-soccer-stick-mode';
 try { if (localStorage.getItem(modeStorageKey) === '1') input.stickMode = 1; } catch { /* Storage can be unavailable. */ }
 const throttleUp = () => input.stickMode === 2 ? 'W' : '↑';
@@ -67,7 +71,7 @@ function showToast(message: string, refusal = false) {
 function renderGuide() {
   const now = performance.now();
   const state = { armed: input.armed, throttle: input.throttle, altitude: flight.pos.y };
-  const step = guideStep(state);
+  const step = isEasy() && !input.armed ? (upHeld() ? 1 : 2) : guideStep(state);
   if (needsTakeoff(state)) successAt = undefined;
   if (step === 4 && successAt === undefined) successAt = now;
   guide.hidden = successAt !== undefined && now - successAt >= 5000;
@@ -80,7 +84,9 @@ function renderGuide() {
     else item.removeAttribute('aria-current');
   }
   const percent = Math.round(input.throttle * 100);
-  const message = step === 1 ? `지금 ${percent}% · ${throttleDown()}를 꾹 눌러 0%로 내려요`
+  const message = isEasy() && step === 1 ? `${throttleUp()}（올림 키）에서 손을 떼세요`
+    : isEasy() && step === 3 ? `${throttleUp()} 꾹 — 떠올라요, 떼면 천천히 내려와요`
+    : step === 1 ? `지금 ${percent}% · ${throttleDown()}를 꾹 눌러 0%로 내려요`
     : step === 2 ? 'Space를 눌러 시동을 걸어요'
     : step === 3 ? `지금 ${percent}% / 55% · ${throttleUp()}를 꾹 눌러 띄워요`
     : `잘했어요! ${tiltKeys()}로 기울여 보세요`;
@@ -100,17 +106,20 @@ function ensureScene() {
     alert.textContent = '3D 화면을 시작할 수 없습니다. WebGL을 지원하는 브라우저에서 다시 열어 주세요. 스코어판·전술판은 사용할 수 있어요.';
   }
 }
-const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyM', 'KeyN', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
+const keys = new Set(['ShiftLeft', 'ShiftRight', 'ArrowUp', 'ArrowDown', 'KeyW', 'KeyS', 'KeyA', 'KeyD', 'ArrowLeft', 'ArrowRight', 'KeyM', 'KeyN', 'KeyT', 'Space', 'Backspace', 'Digit1', 'Digit2', 'Digit3', 'Digit5']);
 function renderHud() {
   renderGuide();
   const axes = axesFromKeys(input.keys, input.stickMode);
-  const leftY = input.stickMode === 2 ? 1 - input.throttle * 2 : axes.pitch;
-  const rightY = input.stickMode === 1 ? 1 - input.throttle * 2 : axes.pitch;
+  const throttleY = isEasy() ? -axes.throttle : 1 - input.throttle * 2;
+  const leftY = input.stickMode === 2 ? throttleY : axes.pitch;
+  const rightY = input.stickMode === 1 ? throttleY : axes.pitch;
   element('left-stick').style.transform = `translate(${-axes.yaw * 22}px, ${leftY * 22}px)`;
   element('right-stick').style.transform = `translate(${axes.roll * 22}px, ${rightY * 22}px)`;
   arm.textContent = input.armed ? 'ARM · 모터 켜짐' : 'DISARM · 모터 꺼짐';
   arm.classList.toggle('armed', input.armed);
-  throttle.textContent = `${Math.round(input.throttle * 100)}%`; meter.value = input.throttle * 100;
+  const shownThrottle = isEasy() ? input.motorThrottle : input.throttle;
+  throttle.textContent = `${isEasy() ? '추력 ' : ''}${Math.round(shownThrottle * 100)}%`; meter.value = shownThrottle * 100;
+  element('vertical-speed').textContent = `${flight.vel.y > 0 ? '상승 +' : flight.vel.y < 0 ? '하강 −' : '수직 속도 '}${Math.abs(flight.vel.y).toFixed(1)} m/s`;
   tilt.textContent = `${(flight.roll * DEG).toFixed(1)}° / ${(flight.pitch * DEG).toFixed(1)}°`;
   speed.textContent = `${Math.hypot(flight.vel.x, flight.vel.y, flight.vel.z).toFixed(2)} m/s`;
   altitude.textContent = `${flight.pos.y.toFixed(2)} m`;
@@ -120,13 +129,30 @@ function renderMode() {
   for (const mode of [1, 2] as const) element(`mode-${mode}`).setAttribute('aria-pressed', String(input.stickMode === mode));
   element('throttle-keys').textContent = `${throttleUp()} / ${throttleDown()}`;
   element('pitch-keys').textContent = input.stickMode === 2 ? '↑ / ↓' : 'W / S';
-  element('guide-down').textContent = throttleDown();
+  element('guide-down').textContent = isEasy() ? throttleUp() : throttleDown();
+  element('guide-release').textContent = isEasy() ? '올림 키에서 손 떼기' : '스로틀 0%';
+  element('guide-lift').textContent = isEasy() ? '떠올라요, 떼면 천천히 내려와요' : '55% 넘으면 떠요';
+  element('guide-fine').textContent = isEasy() ? 'Shift와 함께 누르면 더 천천히' : '55% 근처에선 천천히 움직여요';
+  element('throttle-label').textContent = isEasy() ? '쉬운 스로틀' : '실제 스로틀';
+  element('throttle-help').textContent = isEasy() ? '누르면 상승 · 떼면 천천히 하강. Shift + 올림: 더 천천히 상승' : '스로틀 올림 / 내림 · 놓으면 유지. 55% 근처에선 천천히 · Shift는 미세 조정';
+  element('arm-help').textContent = isEasy() ? 'ARM / DISARM · 올림 키에서 손 떼기' : 'ARM / DISARM · 스로틀 5% 이하';
+  for (const mode of ['easy', 'manual'] as const) element(`throttle-${mode}`).setAttribute('aria-pressed', String(input.throttleMode === mode));
   element('guide-up').textContent = throttleUp();
   element('guide-tilt').textContent = tiltKeys();
-  element('takeoff-help').textContent = `ARM 후 ${throttleUp()}로 약 55%까지 올리면 떠오릅니다.`;
+  element('takeoff-help').textContent = isEasy() ? `ARM 후 ${throttleUp()} 꾹 — 떠올라요, 떼면 천천히 내려와요.` : `ARM 후 ${throttleUp()}로 약 55%까지 올리면 떠오릅니다.`;
   element('left-stick-label').textContent = `왼쪽 스틱 · ${input.stickMode === 2 ? '스로틀' : '피치'}/요`;
   element('right-stick-label').textContent = `오른쪽 스틱 · ${input.stickMode === 1 ? '스로틀' : '피치'}/롤`;
 }
+function selectThrottleMode(mode: ThrottleMode) {
+  if (!changeThrottleMode(input, mode)) { showToast('착륙·시동 끈 뒤 바꿔요'); return; }
+  saveThrottleMode(mode);
+  successAt = undefined; toastUntil = 0; refusalUntil = 0;
+  notice.textContent = isEasy() ? '쉬운 스로틀 · 올림 키에서 손을 떼고 Space로 시동' : '실제 스로틀 · 놓아도 값 유지 · 5% 이하에서 시동';
+  renderMode(); renderHud();
+}
+for (const mode of ['easy', 'manual'] as const) element(`throttle-${mode}`).addEventListener('click', () => {
+  selectThrottleMode(mode); element(`throttle-${mode}`).blur();
+});
 function changeStickMode(mode: StickMode) {
   if (input.armed) { showToast('착륙·시동 끈 뒤 바꿔요'); return; }
   if (input.stickMode === mode) return;
@@ -143,6 +169,7 @@ for (const mode of [1, 2] as const) element(`mode-${mode}`).addEventListener('cl
   element(`mode-${mode}`).blur();
 });
 renderMode();
+notice.textContent = isEasy() ? '올림 키에서 손을 떼고 Space로 시동' : '스로틀 5% 이하에서 Space로 ARM';
 window.addEventListener('keydown', e => {
   if (tab !== 'fly') return;
   if (!keys.has(e.code) || e.ctrlKey || e.metaKey || e.altKey) return;
@@ -158,12 +185,13 @@ window.addEventListener('keydown', e => {
   }
   if (e.repeat) return;
   if (e.code === 'KeyN') changeMap(mapIds[(mapIds.indexOf(mapId) + 1) % mapIds.length]);
+  if (e.code === 'KeyT') selectThrottleMode(isEasy() ? 'manual' : 'easy');
   if (e.code === 'KeyM') changeStickMode(input.stickMode === 2 ? 1 : 2);
   if (e.code === 'Space') {
     const allowed = toggleArm(input);
-    if (!allowed) showToast(`시동이 안 걸려요 · 스로틀이 ${Math.round(input.throttle * 100)}%예요 · ${throttleDown()}를 꾹 눌러 0%로 내린 뒤 Space`, true);
+    if (!allowed) showToast(isEasy() ? `시동이 안 걸려요 · ${throttleUp()} 올림 키에서 손을 뗀 뒤 Space` : `시동이 안 걸려요 · 스로틀이 ${Math.round(input.throttle * 100)}%예요 · ${throttleDown()}를 꾹 눌러 0%로 내린 뒤 Space`, true);
     else { toastUntil = 0; refusalUntil = 0; }
-    notice.textContent = !allowed ? `ARM 거부: ${throttleDown()}로 스로틀을 5% 이하로 낮추세요.` : input.armed ? `모터 켜짐 · ${throttleUp()}로 스로틀을 천천히 올리세요.` : '모터 꺼짐 · 스로틀 값은 유지됩니다.';
+    notice.textContent = isEasy() ? (!allowed ? `ARM 거부: ${throttleUp()} 올림 키에서 손을 떼세요.` : input.armed ? `${throttleUp()} 꾹 — 상승 · 떼면 천천히 하강` : '모터 꺼짐 · 올림 키에서 손을 떼고 Space로 시동') : !allowed ? `ARM 거부: ${throttleDown()}로 스로틀을 5% 이하로 낮추세요.` : input.armed ? `모터 켜짐 · ${throttleUp()}로 스로틀을 천천히 올리세요.` : '모터 꺼짐 · 스로틀 값은 유지됩니다.';
   }
   if (e.code === 'Backspace') {
     successAt = undefined; toastUntil = 0; refusalUntil = 0; lastGroundHint = -Infinity;
@@ -183,7 +211,7 @@ function safetyStop() {
 window.addEventListener('blur', safetyStop);
 document.addEventListener('visibilitychange', () => { if (document.hidden) safetyStop(); });
 const qa = Object.freeze({ state: () => ({
-  stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
+  throttleMode: input.throttleMode, vy: flight.vel.y, stickMode: input.stickMode, armed: input.armed, throttle: input.throttle, pos: { ...flight.pos }, vel: { ...flight.vel },
   net: netView.state(),
   rollDeg: flight.roll * DEG, pitchDeg: flight.pitch * DEG, yawDeg: flight.yaw * DEG, camera: view?.mode ?? 1, arena: arenaSize(), tab,
 }) });
@@ -242,6 +270,11 @@ function selectTab(next: Tab) {
   }
   scoreView.setActive(next === 'score'); tacticsView.setActive(next === 'tactics');
   if (next === 'fly') {
+    if (!input.armed) {
+      const storedMode = loadThrottleMode();
+      if (input.throttleMode !== storedMode) changeThrottleMode(input, storedMode);
+      renderMode();
+    }
     ensureScene(); renderHud(); startFrames();
     if (!keyboardAcknowledged && matchMedia('(pointer: coarse)').matches && !matchMedia('(hover: hover)').matches && !keyboardOverlay.open) keyboardOverlay.showModal();
   } else if (keyboardOverlay.open) keyboardOverlay.close();

@@ -105,3 +105,13 @@ kbd { font: inherit; font-weight: 750; color: inherit; }
 .map-toggle button[aria-pressed="true"] { color: #e8faff; background: #21425a; border-color: #8ddfff; }
 #help { max-height: calc(100dvh - 112px); }
 @media (max-width: 680px) { .workspace-tabs a { flex: 1; text-align: center; padding: 12px 8px; font-size: 13px; } .workspace-heading .eyebrow { font-size: 8px; letter-spacing: .08em; } #help { width: 190px; } .map-toggle small { font-size: 7px; } }
+
+/* Throttle choice and vertical motion stay next to the pilot's thrust reading. */
+.throttle-toggle { margin-top: 8px; }
+.throttle-toggle small { display: block; margin-top: 4px; font-size: 10px; font-weight: 400; }
+.vertical-speed { margin: -3px 0 14px; color: #a8e8ff; font-size: 15px; font-weight: 700; font-variant-numeric: tabular-nums; }
+.net-throttle-mode { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin: 10px 0; }
+.net-throttle-mode button { border: 1px solid #45617b; border-radius: 6px; padding: 7px 12px; background: #0a1726; color: #b7ccdf; font: inherit; cursor: pointer; }
+.net-throttle-mode button[aria-pressed='true'] { border-color: #8ddfff; background: #21425a; color: #e8faff; }
+.net-throttle-mode button:focus-visible { outline: 2px solid white; outline-offset: 2px; }
+#net-vertical-speed { color: #a8e8ff; font-weight: 700; font-variant-numeric: tabular-nums; }

@@ -1,13 +1,17 @@
+import type { ThrottleMode } from './climb';
 import { C } from './constants';
 import { axesFromKeys, type StickMode } from './keymap';
 export interface InputState {
+  throttleMode: ThrottleMode; climb: -1 | 0 | 1; fine: boolean; climbIntegral: number;
   stickMode: StickMode; armed: boolean; throttle: number; motorThrottle: number; keys: Set<string>;
   throttleDirection: number; throttleHeldSeconds: number;
 }
-export const createInput = (): InputState => ({ stickMode: 2, armed: false, throttle: 0, motorThrottle: 0, keys: new Set(), throttleDirection: 0, throttleHeldSeconds: 0 });
+export const createInput = (throttleMode: ThrottleMode = 'easy'): InputState => ({ throttleMode, climb: 0, fine: false, climbIntegral: 0, stickMode: 2, armed: false, throttle: 0, motorThrottle: 0, keys: new Set(), throttleDirection: 0, throttleHeldSeconds: 0 });
 export function toggleArm(input: InputState): boolean {
-  if (input.armed) { input.armed = false; input.motorThrottle = 0; return true; }
-  if (input.throttle > C.armThreshold) return false;
+  if (input.armed) { input.armed = false; input.motorThrottle = 0; input.climbIntegral = 0; return true; }
+  if (input.throttleMode === 'easy'
+    ? input.keys.has(input.stickMode === 2 ? 'KeyW' : 'ArrowUp')
+    : input.throttle > C.armThreshold) return false;
   input.armed = true;
   return true;
 }
@@ -15,9 +19,13 @@ export function toggleArm(input: InputState): boolean {
 export function loseFocus(input: InputState): void {
   input.armed = false; input.throttle = 0; input.motorThrottle = 0; input.keys.clear();
   input.throttleDirection = 0; input.throttleHeldSeconds = 0;
+  input.climb = 0; input.fine = false; input.climbIntegral = 0;
 }
 export function readInput(input: InputState, dt: number) {
   const { throttle: direction, pitch, roll, yaw } = axesFromKeys(input.keys, input.stickMode);
+  input.climb = direction as -1 | 0 | 1;
+  input.fine = input.keys.has('ShiftLeft') || input.keys.has('ShiftRight');
+  if (input.throttleMode === 'easy') return { pitch, roll, yaw };
   if (direction !== input.throttleDirection || direction === 0) input.throttleHeldSeconds = 0;
   input.throttleDirection = direction;
   if (direction !== 0) {
@@ -51,4 +59,19 @@ export function releaseKey(input: InputState, code: string): void {
   if ((input.stickMode === 2 ? ['KeyW', 'KeyS'] : ['ArrowUp', 'ArrowDown']).includes(code)) {
     input.throttleDirection = 0; input.throttleHeldSeconds = 0;
   }
+}
+
+const THROTTLE_STORAGE_KEY = 'drone-soccer-throttle-mode';
+export function loadThrottleMode(): ThrottleMode {
+  try { return localStorage.getItem(THROTTLE_STORAGE_KEY) === 'manual' ? 'manual' : 'easy'; }
+  catch { return 'easy'; }
+}
+export function saveThrottleMode(mode: ThrottleMode): void {
+  try { localStorage.setItem(THROTTLE_STORAGE_KEY, mode); } catch { /* Storage may be unavailable. */ }
+}
+export function changeThrottleMode(input: InputState, mode: ThrottleMode): boolean {
+  if (input.armed) return false;
+  loseFocus(input);
+  input.throttleMode = mode;
+  return true;
 }

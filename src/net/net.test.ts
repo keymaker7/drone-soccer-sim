@@ -1,6 +1,7 @@
 import { describe, expect, it, vi, afterEach } from 'vitest';
-import { DEFAULT_ARENA } from '../sim/constants';
-import { createFlight } from '../sim/flight';
+import { C, DEFAULT_ARENA } from '../sim/constants';
+import { createInput } from '../sim/input';
+import { createFlight, stepFlight } from '../sim/flight';
 import { decode, encode, rolesFor, type Message, type DroneSnapshot } from './protocol';
 import { Lobby } from './lobby';
 import { Interpolator } from './interp';
@@ -26,6 +27,11 @@ const frame=(x:number):DroneSnapshot[]=>[{id:'a',team:'blue',role:'striker',x,y:
 afterEach(()=>{vi.useRealTimers();MemoryTransport.rooms.clear();});
 describe('protocol',()=>{
  it('round trips messages and rounds numeric bandwidth',()=>{const m:Message={v:1,type:'input',seq:1,axes:{pitch:.123456,roll:0,yaw:-1},throttle:.555555,armed:true};expect(decode(encode(m))).toEqual({...m,axes:{...m.axes,pitch:.123},throttle:.556});});
+ it('validates optional easy controls while preserving legacy v:1 messages',()=>{
+  const base:Message={v:1,type:'input',seq:1,axes:{pitch:0,roll:0,yaw:0},throttle:0,armed:false};
+  expect(decode(base)).toEqual(base); expect(decode({...base,throttleMode:'easy',climb:-1,fine:true})).toBeTruthy();
+  for(const fields of [{throttleMode:'bad'},{climb:2},{climb:.5},{fine:1}]) expect(decode({...base,...fields})).toBeNull();
+ });
  it('ignores malformed or untrusted data',()=>{for(const m of ['{',null,{v:2,type:'ping',t:0},{v:1,type:'input',seq:2,axes:{pitch:NaN,roll:0,yaw:0},throttle:1,armed:true},{v:1,type:'hello',nick:'123456789',team:'blue',role:'striker'},{v:1,type:'welcome',id:'a',arena:{halfLength:0,halfWidth:2,height:4},maxPerTeam:3}])expect(decode(m)).toBeNull();});
 });
 describe('lobby',()=>{
@@ -38,6 +44,31 @@ describe('interpolation',()=>{
 });
 describe('authoritative host and clients',()=>{
  async function setup(count=3){vi.useFakeTimers();const ht=new MemoryTransport();const host=new HostSession({room:'ABCD',arena:DEFAULT_ARENA,maxPerTeam:3,transport:ht});await host.start();const clients:ClientSession[]=[];for(let n=0;n<count;n++){const c=new ClientSession({room:'ABCD',nick:`pilot${n}`,team:n<3?'blue':'red',role:rolesFor(3)[n%3],transport:new MemoryTransport()});await c.start();clients.push(c);}return {host,clients,ht};}
+ it('easy host input uses the same controller as local flight, with release descent and HUD telemetry',async()=>{
+  const {host,clients}=await setup(1); const client=clients[0]; const drone=host.simulation.get(client.myId!)!;
+  const local=createFlight(); local.pos={...drone.flight.pos}; local.yaw=drone.flight.yaw; const input=createInput(); input.armed=true;
+  client.sendInput({axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:1,throttleMode:'easy',climb:0,fine:false}); expect(drone.input.armed).toBe(true);
+  for (const climb of [1,0] as const) {
+   input.climb=climb;
+   for(let n=0;n<240;n++) {
+    client.sendInput({axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:1,throttleMode:'easy',climb,fine:false});
+    host.advance(1000/120); stepFlight(local,input,C.step,host.arena,{pitch:0,roll:0,yaw:0});
+   }
+   expect(drone.flight).toEqual(local);
+  }
+  expect(Math.abs(drone.flight.vel.y+.5)).toBeLessThan(.1); expect(host.drones[0].vy).toBe(drone.flight.vel.y); expect(host.drones[0].motorThrottle).toBe(drone.input.motorThrottle);
+  client.disarm(); expect(drone.input.armed).toBe(false); expect(drone.input.throttleMode).toBe('easy'); expect(drone.input.climb).toBe(0); expect(drone.input.fine).toBe(false);
+  host.close(); client.close();
+ });
+ it('easy host refuses up-to-arm and armed mode changes, but permits disarmed mode changes',async()=>{
+  const {host,clients}=await setup(1); const client=clients[0]; const drone=host.simulation.get(client.myId!)!;
+  const controls={axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:0,throttleMode:'easy' as const,fine:false};
+  client.sendInput({...controls,climb:1}); expect(drone.input.armed).toBe(false);
+  client.sendInput({...controls,climb:0}); expect(drone.input.armed).toBe(true);
+  client.sendInput({...controls,throttleMode:'manual',throttle:1}); expect(drone.input.throttleMode).toBe('easy');
+  client.sendInput({...controls,armed:false,throttleMode:'manual'}); expect(drone.input.throttleMode).toBe('manual'); expect(drone.input.armed).toBe(false);
+  host.close(); client.close();
+ });
  it('integrates three clients join → input → state → leave',async()=>{const {host,clients}=await setup();expect(host.roster).toHaveLength(3);clients.forEach(c=>{c.sendInput({axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:0});c.sendInput({axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:.8});});vi.advanceTimersByTime(500);expect(clients.every(c=>c.drones.length===3)).toBe(true);expect(host.drones.every(d=>d.y>.2)).toBe(true);clients[0].close();expect(host.roster).toHaveLength(2);vi.advanceTimersByTime(50);expect(clients[1].drones).toHaveLength(2);host.close();expect(clients[1].error).toBe('방이 닫혔어요');clients.forEach(c=>c.close());});
  it('simulates six independent inputs and latches global disarm',async()=>{const {host,clients}=await setup(6);clients.forEach((c,n)=>{c.sendInput({axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:0});c.sendInput({axes:{pitch:n/6,roll:0,yaw:n/6},armed:true,throttle:.6+n*.05});});vi.advanceTimersByTime(600);expect(new Set(host.drones.map(d=>d.y.toFixed(3))).size).toBe(6);host.disarmAll();vi.advanceTimersByTime(100);expect(host.drones.every(d=>!d.armed)).toBe(true);clients[0].disarm();clients[0].sendInput({axes:{pitch:0,roll:0,yaw:0},armed:true,throttle:0});expect(host.drones[0].armed).toBe(true);host.close();clients.forEach(c=>c.close());});
  it('rejects high throttle ARM and times out silent input',async()=>{const {host,clients,ht}=await setup(1);const id=clients[0].myId!;for(const fn of ht.messages)fn(id,{v:1,type:'input',seq:100,axes:{pitch:0,roll:0,yaw:0},throttle:1,armed:true});expect(host.drones[0].armed).toBe(false);for(const fn of ht.messages)fn(id,{v:1,type:'input',seq:101,axes:{pitch:0,roll:0,yaw:0},throttle:0,armed:true});expect(host.drones[0].armed).toBe(true);host.advance(1001,performance.now()+1001);expect(host.drones[0].armed).toBe(false);host.close();clients.forEach(c=>c.close());});

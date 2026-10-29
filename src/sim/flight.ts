@@ -1,3 +1,4 @@
+import { climbControl } from './climb';
 import { C, MAX_THRUST, DEFAULT_ARENA, layoutFor, type Arena } from './constants';
 import { readInput, type InputState } from './input';
 export interface Vec3 { x: number; y: number; z: number }
@@ -35,6 +36,12 @@ export function collide(s: FlightState, arena: Arena = DEFAULT_ARENA): void {
 }
 export function stepFlight(s: FlightState, input: InputState, dt: number, arena: Arena = DEFAULT_ARENA, axes?: { pitch: number; roll: number; yaw: number }): void {
   const stick = axes ?? readInput(input, dt);
+  let grounded = false;
+  if (input.throttleMode === 'easy') {
+    const control = climbControl({ altitude: s.pos.y, vy: s.vel.y, pitch: s.pitch, roll: s.roll, integral: input.climbIntegral }, input.climb, input.fine, input.armed, dt);
+    input.throttle = control.throttle; input.climbIntegral = control.integral; grounded = control.grounded;
+    if (grounded) input.motorThrottle = 0;
+  }
   // Exact first-order response; DISARM bypasses the lag and cuts thrust immediately.
   input.motorThrottle = input.armed
     ? input.motorThrottle + (input.throttle - input.motorThrottle) * -Math.expm1(-dt / C.motorTimeConstant)
@@ -59,4 +66,8 @@ export function stepFlight(s: FlightState, input: InputState, dt: number, arena:
   const a = acceleration(s, input);
   for (const axis of ['x', 'y', 'z'] as const) { s.vel[axis] += a[axis] * dt; s.pos[axis] += s.vel[axis] * dt; }
   collide(s, arena);
+  if (grounded) {
+    s.pos.y = C.radius;
+    s.vel = { x: 0, y: 0, z: 0 };
+  }
 }

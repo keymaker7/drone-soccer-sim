@@ -6,7 +6,7 @@ import { createFixedClock } from './clock';
 
 function airborne(throttle: number = C.hoverThrottle, armed = true) {
   const state = createFlight(); state.pos = { x: 0, y: 2, z: 0 };
-  const input = createInput(); input.armed = armed; input.throttle = throttle; input.motorThrottle = armed ? throttle : 0;
+  const input = createInput('manual'); input.armed = armed; input.throttle = throttle; input.motorThrottle = armed ? throttle : 0;
   return { state, input };
 }
 function run(seconds: number, fn: () => void) { for (let n = 0; n < Math.round(seconds / C.step); n++) fn(); }
@@ -71,25 +71,25 @@ describe('비행 모델', () => {
 });
 describe('입력 및 ARM 안전 규칙', () => {
   it('첫 로드 상태는 DISARM, 스로틀 0이고 이륙하지 않음', () => {
-    const input = createInput(), state = createFlight();
+    const input = createInput('manual'), state = createFlight();
     expect(input.armed).toBe(false); expect(input.throttle).toBe(0);
     run(5, () => stepFlight(state, input, C.step)); expect(state.pos).toEqual(C.start);
   });
   it('5% 초과 ARM 거부, 5% 이하 ARM 허용, DISARM은 항상 허용', () => {
     for (const value of [0, 0.05, 0.050001, 1]) {
-      const input = createInput(); input.throttle = value;
+      const input = createInput('manual'); input.throttle = value;
       expect(toggleArm(input)).toBe(value <= C.armThreshold); expect(input.armed).toBe(value <= C.armThreshold);
     }
-    const input = createInput(); input.armed = true; input.throttle = 1;
+    const input = createInput('manual'); input.armed = true; input.throttle = 1;
     expect(toggleArm(input)).toBe(true); expect(input.armed).toBe(false);
   });
   it('blur/hidden 공용 안전 처리 → 즉시 DISARM + 스로틀 0 + 눌린 키 해제', () => {
-    const input = createInput(); input.armed = true; input.throttle = 0.8; input.keys.add('KeyW'); input.keys.add('ArrowUp');
+    const input = createInput('manual'); input.armed = true; input.throttle = 0.8; input.keys.add('KeyW'); input.keys.add('ArrowUp');
     loseFocus(input); expect(input.armed).toBe(false); expect(input.throttle).toBe(0); expect(input.keys.size).toBe(0);
     readInput(input, 1); expect(input.throttle).toBe(0);
   });
   it('스로틀은 누르는 동안 증감, 해제 시 유지, 0~100% 제한', () => {
-    const input = createInput(); input.keys.add('KeyW'); readInput(input, 1); expect(input.throttle).toBeCloseTo(0.4892);
+    const input = createInput('manual'); input.keys.add('KeyW'); readInput(input, 1); expect(input.throttle).toBeCloseTo(0.4892);
     input.keys.clear(); readInput(input, 2); expect(input.throttle).toBeCloseTo(0.4892);
     input.keys.add('KeyW'); readInput(input, 10); expect(input.throttle).toBe(1);
     input.keys = new Set(['KeyS']); readInput(input, 10); expect(input.throttle).toBe(0);
@@ -170,7 +170,7 @@ describe('FIX-2 빠른 조종 응답', () => {
 
 it('accepts authoritative remote axes without synthesizing keyboard input', () => {
   const remote = createFlight(); const local = createFlight();
-  const ri = createInput(); const li = createInput();
+  const ri = createInput('manual'); const li = createInput('manual');
   ri.armed = li.armed = true; ri.throttle = li.throttle = .65;
   li.keys.add('ArrowUp'); li.keys.add('KeyD');
   for (let n = 0; n < 120; n++) {

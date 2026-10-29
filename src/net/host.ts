@@ -46,7 +46,7 @@ export class HostSession {
   onChange(fn: () => void) { this.listeners.add(fn); return () => { this.listeners.delete(fn); }; }
   private changed() { for (const fn of this.listeners) fn(); }
   get roster() { return this.lobby.roster; }
-  get drones(): DroneSnapshot[] { return this.roster.flatMap(p => { const d = this.simulation.get(p.id); return d ? [{id:p.id,team:p.team,role:p.role,...d.flight.pos,x:d.flight.pos.x,y:d.flight.pos.y,z:d.flight.pos.z,roll:d.flight.roll,pitch:d.flight.pitch,yaw:d.flight.yaw,armed:d.input.armed}] : []; }); }
+  get drones(): DroneSnapshot[] { return this.roster.flatMap(p => { const d = this.simulation.get(p.id); return d ? [{id:p.id,team:p.team,role:p.role,...d.flight.pos,x:d.flight.pos.x,y:d.flight.pos.y,z:d.flight.pos.z,roll:d.flight.roll,pitch:d.flight.pitch,yaw:d.flight.yaw,armed:d.input.armed,motorThrottle:d.input.motorThrottle,vy:d.flight.vel.y}] : []; }); }
   setConfig(config: {arena: Arena; maxPerTeam: 3 | 5}) { if (this.roster.length) return false; this.arena = config.arena; this.maxPerTeam = config.maxPerTeam; this.lobby.maxPerTeam = config.maxPerTeam; this.sendRoster(); this.changed(); return true; }
   configure(config: {arena: Arena; maxPerTeam: 3 | 5}) { return this.setConfig(config); }
   async start() { this.status = 'connecting'; this.changed(); try { await this.transport.open({role:'host',room:this.room}); if ((this.status as SessionStatus) === 'closed') return; this.status = 'connected'; this.lastTime = performance.now(); this.timer = setInterval(() => { const now = performance.now(); this.advance(now - this.lastTime, now); this.lastTime = now; }, 1000/120); this.changed(); } catch (e) { this.error = e instanceof Error ? e.message : String(e); this.status = 'error'; this.changed(); throw e; } }
@@ -58,14 +58,19 @@ export class HostSession {
       if (reason) { this.transport.send(id,{v:1,type:'reject',reason}); return; }
       const flight = createFlight(this.arena); const index = rolesFor(this.maxPerTeam).indexOf(message.role);
       flight.pos.x = (message.team === 'blue' ? -1 : 1) * (this.arena.halfLength-2.5); flight.pos.z = (index-(this.maxPerTeam-1)/2)*.75; flight.yaw = message.team === 'blue' ? 0 : Math.PI;
-      this.simulation.set(id,{flight,input:createInput(),axes:{pitch:0,roll:0,yaw:0},lastInput:performance.now(),seq:-1,lock:false});
+      this.simulation.set(id,{flight,input:createInput('manual'),axes:{pitch:0,roll:0,yaw:0},lastInput:performance.now(),seq:-1,lock:false});
       this.transport.send(id,{v:1,type:'welcome',id,arena:this.arena,maxPerTeam:this.maxPerTeam}); this.sendRoster(); this.changed();
     } else if (message.type === 'input') {
       const d = this.simulation.get(id); if (!d || message.seq <= d.seq) return;
       d.seq = message.seq; d.lastInput = performance.now(); d.axes = {...message.axes};
-      if (!message.armed) { d.input.armed = false; d.input.motorThrottle = 0; d.lock = false; }
-      else if (!d.input.armed && !d.lock && message.throttle <= C.armThreshold) d.input.armed = true;
-      d.input.throttle = message.throttle;
+      if (!message.armed) { d.input.armed = false; d.input.motorThrottle = 0; d.input.climbIntegral = 0; d.lock = false; }
+      // Mode changes require DISARM; absent fields preserve v:1 manual clients.
+      const mode = message.throttleMode ?? 'manual';
+      if (!d.input.armed) d.input.throttleMode = mode;
+      if (mode !== d.input.throttleMode) return;
+      d.input.climb = message.climb ?? 0; d.input.fine = message.fine ?? false;
+      if (message.armed && !d.input.armed && !d.lock && (mode === 'easy' ? d.input.climb <= 0 : message.throttle <= C.armThreshold)) d.input.armed = true;
+      if (mode === 'manual') d.input.throttle = message.throttle;
     } else if (message.type === 'ping') this.transport.send(id,{v:1,type:'pong',t:message.t});
     else if (message.type === 'pong' && this.pending.get(id) === message.t) { const r = this.rtts.get(id) ?? []; r.push(performance.now()-message.t); if (r.length>10) r.shift(); this.rtts.set(id,r); this.pending.delete(id); }
   }

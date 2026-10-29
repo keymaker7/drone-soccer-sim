@@ -17,7 +17,7 @@ for (const mode of [1, 2] as const) describe(`모드 ${mode} 네 축`, () => {
     });
   }
   it('스로틀 유지, 나머지 축 중립 복귀, 재누름 감속', () => {
-    const input = createInput(); input.stickMode = mode as StickMode;
+    const input = createInput('manual'); input.stickMode = mode as StickMode;
     input.throttle = 0.55;
     const throttleKey = pairs.throttle[0]!;
     input.keys.add(throttleKey); readInput(input, 0.3);

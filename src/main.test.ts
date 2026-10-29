@@ -34,7 +34,7 @@ class Element extends EventTarget {
 }
 let steps: Element[];
 let elements: Map<string, Element>;
-let win: EventTarget & { innerWidth: number; location: {hash: string}; __DRONE_QA?: { state(): { stickMode: 1 | 2; armed: boolean; throttle: number; pos: { x: number; y: number }; arena: {length:number;width:number;height:number}; tab:string } } };
+let win: EventTarget & { innerWidth: number; location: {hash: string}; __DRONE_QA?: { state(): { throttleMode: 'easy' | 'manual'; vy: number; stickMode: 1 | 2; armed: boolean; throttle: number; pos: { x: number; y: number }; arena: {length:number;width:number;height:number}; tab:string } } };
 let doc: EventTarget & { hidden: boolean; getElementById(id: string): Element };
 let frame: (time: number) => void;
 let now: number;
@@ -47,7 +47,7 @@ function tick(ms: number) {
   const end = now + ms;
   while (now < end) { now = Math.min(now + 16, end); frame(now); }
 }
-async function boot(width = 1440, coarse = false, hover = true, storage = { getItem: vi.fn((_key: string): string | null => null), setItem: vi.fn() }, hash = '') {
+async function boot(width = 1440, coarse = false, hover = true, storage = { getItem: vi.fn((key: string): string | null => key === 'drone-soccer-throttle-mode' ? 'manual' : null), setItem: vi.fn() }, hash = '') {
   vi.resetModules(); now = 0; frame = () => {};
   steps = [1, 2, 3, 4].map(step => { const item = new Element(); item.dataset.step = String(step); return item; });
   elements = new Map();
@@ -297,5 +297,60 @@ describe('NET-1 탭 연결', () => {
     expect(win.__DRONE_QA!.state()).toMatchObject({tab:'net',armed:false,throttle:0,net:{role:null}});
     el('tab-score').dispatchEvent(new Event('click'));
     expect(netSpies.setActive).toHaveBeenLastCalledWith(false);
+  });
+});
+
+
+describe('FIX-6 쉬운 스로틀 UI', () => {
+  beforeEach(async () => { await boot(1440, false, true, { getItem: vi.fn(() => null), setItem: vi.fn() }); });
+  it('기본 쉬움: 지상 정지, 올림 중 ARM 거부, 놓고 ARM 허용', () => {
+    tick(2000);
+    expect(win.__DRONE_QA!.state()).toMatchObject({ throttleMode: 'easy', armed: false, vy: 0, pos: {y: C.radius} });
+    expect(el('left-stick').style.transform).toBe('translate(0px, 0px)');
+    key('KeyW'); key('Space');
+    expect(win.__DRONE_QA!.state().armed).toBe(false);
+    expect(el('flight-toast').textContent).toContain('올림 키에서 손을 뗀 뒤 Space');
+    expect(el('startup-guide').dataset.step).toBe('1');
+    key('KeyW', 'keyup'); key('Space'); tick(1000);
+    expect(win.__DRONE_QA!.state()).toMatchObject({armed:true, throttle:0, vy:0, pos:{y:C.radius}});
+  });
+  it('W로 상승 후 놓으면 스틱 중앙·2초 내 하강, 착지 후 정지', () => {
+    key('Space'); key('KeyW'); tick(2000);
+    expect(Math.abs(win.__DRONE_QA!.state().vy - 1.5)).toBeLessThanOrEqual(.15);
+    expect(el('left-stick').style.transform).toBe('translate(0px, -22px)');
+    expect(el('throttle').textContent).toContain('추력 ');
+    expect(el('vertical-speed').textContent).toContain('상승 +');
+    key('KeyW', 'keyup'); tick(2000);
+    expect(el('left-stick').style.transform).toBe('translate(0px, 0px)');
+    expect(win.__DRONE_QA!.state().vy).toBeCloseTo(-.5, 1);
+    expect(el('vertical-speed').textContent).toContain('하강 −0.5');
+    tick(10000);
+    expect(win.__DRONE_QA!.state()).toMatchObject({armed:true, throttle:0, vy:0, pos:{y:C.radius}});
+  });
+  it('T와 버튼은 시동 OFF에서만 전환·저장하며 반복 키를 무시', () => {
+    key('Space'); key('KeyT');
+    expect(win.__DRONE_QA!.state().throttleMode).toBe('easy');
+    expect(localStorage.setItem).not.toHaveBeenCalled();
+    key('Space'); key('KeyT');
+    expect(win.__DRONE_QA!.state().throttleMode).toBe('manual');
+    expect(localStorage.setItem).toHaveBeenLastCalledWith('drone-soccer-throttle-mode','manual');
+    key('KeyT', 'keydown', true);
+    expect(win.__DRONE_QA!.state().throttleMode).toBe('manual');
+    el('throttle-easy').dispatchEvent(new Event('click'));
+    expect(win.__DRONE_QA!.state().throttleMode).toBe('easy');
+    expect(el('throttle-easy').attributes.get('aria-pressed')).toBe('true');
+  });
+  it('모드 1 올림·내림 스틱과 첫 비행 안내', () => {
+    key('KeyM');
+    expect(el('guide-down').textContent).toBe('↑');
+    expect(el('guide-release').textContent).toBe('올림 키에서 손 떼기');
+    expect(el('guide-up').textContent).toBe('↑');
+    key('ArrowUp'); key('Space');
+    expect(win.__DRONE_QA!.state().armed).toBe(false);
+    expect(el('right-stick').style.transform).toBe('translate(0px, -22px)');
+    key('ArrowUp','keyup'); tick(16);
+    expect(el('right-stick').style.transform).toBe('translate(0px, 0px)');
+    key('Space'); key('ShiftLeft'); key('ArrowUp'); tick(2000);
+    expect(win.__DRONE_QA!.state().vy).toBeCloseTo(.5, 1);
   });
 });

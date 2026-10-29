@@ -30,12 +30,13 @@ export class ClientSession {
   sendInput(controls: Controls) {
     const next = {...controls,axes:{...controls.axes}};
     // Enforce ARM safety on both sides of the network boundary.
-    if (!this.controls.armed && next.armed && next.throttle > .05) next.armed = false;
+    const unsafeArm = next.throttleMode === 'easy' ? (next.climb ?? 0) > 0 : next.throttle > .05;
+    if (!this.controls.armed && next.armed && unsafeArm) next.armed = false;
     const changed = JSON.stringify(next) !== JSON.stringify(this.controls); this.controls = next;
     if (changed) this.transmitInput();
   }
   private transmitInput() { if (this.myId && this.status === 'connected') this.transport.send(this.host,{v:1,type:'input',seq:this.seq++,...this.controls}); }
-  disarm() { this.controls = {axes:{pitch:0,roll:0,yaw:0},throttle:0,armed:false}; this.transmitInput(); }
+  disarm() { this.controls = {axes:{pitch:0,roll:0,yaw:0},throttle:0,armed:false,throttleMode:this.controls.throttleMode,climb:0,fine:false}; this.transmitInput(); }
   private receive(message: Message) {
     if (message.type === 'welcome') { this.myId = message.id; this.arena = message.arena; this.maxPerTeam = message.maxPerTeam; this.transmitInput(); }
     else if (message.type === 'roster') { this.roster = message.roster; if (message.arena) this.arena = message.arena; if (message.maxPerTeam) this.maxPerTeam = message.maxPerTeam; }
